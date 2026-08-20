@@ -38,8 +38,6 @@
         </el-form-item>
         <el-button type="primary" size="large" class="submit" :loading="loading" @click="onRegister">注 册</el-button>
       </el-form>
-
-      <p class="tip">默认账号 admin / admin123</p>
     </div>
   </div>
 </template>
@@ -168,11 +166,5 @@ async function onRegister() {
 .submit {
   width: 100%;
   margin-top: 8px;
-}
-.tip {
-  text-align: center;
-  font-size: 12px;
-  color: #c0c4cc;
-  margin-top: 16px;
 }
 </style>

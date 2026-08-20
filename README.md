@@ -52,6 +52,18 @@ go run ./cmd/server
 
 默认监听 `:8003`，首次启动自动建库建表、创建默认账号并初始化预置分类/账户。
 
+环境变量可通过 `.env` 文件配置（后端 `backend-go/.env`、前端 `frontend/.env`，均不提交版本库；模板见同目录 `.env.example`，复制后修改即可）：
+
+```bash
+# 后端
+cd backend-go
+copy .env.example .env   # Windows 首次配置
+
+# 前端
+cd frontend
+copy .env.example .env   # Windows 首次配置
+```
+
 可用环境变量（`.env` 或系统环境变量）：
 
 | 变量 | 默认值 | 说明 |
