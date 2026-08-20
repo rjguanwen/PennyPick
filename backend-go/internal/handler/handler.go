@@ -1,0 +1,80 @@
+package handler
+
+import (
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+
+	"pennypickbackend/internal/config"
+	"pennypickbackend/internal/middleware"
+)
+
+// Handler 持有依赖：数据库、配置、认证
+type Handler struct {
+	db   *gorm.DB
+	cfg  *config.Config
+	auth *middleware.Auth
+}
+
+func New(db *gorm.DB, cfg *config.Config, auth *middleware.Auth) *Handler {
+	return &Handler{db: db, cfg: cfg, auth: auth}
+}
+
+// currentUser 从上下文获取当前登录用户
+func currentUser(c *gin.Context) *middleware.UserContext {
+	v, ok := c.Get("user")
+	if !ok {
+		return nil
+	}
+	return v.(*middleware.UserContext)
+}
+
+// RegisterRoutes 注册全部路由
+func (h *Handler) RegisterRoutes(r *gin.Engine) {
+	api := r.Group("/api")
+
+	// 公开接口
+	api.POST("/auth/login", h.Login)
+	api.POST("/auth/register", h.Register)
+
+	// 需要登录
+	user := api.Group("", h.auth.RequireUser())
+	user.GET("/auth/me", h.Me)
+	user.PUT("/auth/password", h.ChangePassword)
+
+	// 分类
+	user.GET("/categories", h.ListCategories)
+	user.POST("/categories", h.CreateCategory)
+	user.PATCH("/categories/:id", h.UpdateCategory)
+	user.DELETE("/categories/:id", h.DeleteCategory)
+
+	// 账户
+	user.GET("/accounts", h.ListAccounts)
+	user.POST("/accounts", h.CreateAccount)
+	user.DELETE("/accounts/:id", h.DeleteAccount)
+
+	// 账单
+	user.GET("/bills", h.ListBills)
+	user.POST("/bills", h.CreateBill)
+	user.PATCH("/bills/:id", h.UpdateBill)
+	user.DELETE("/bills/:id", h.DeleteBill)
+
+	// 预算（总预算）
+	user.GET("/budgets", h.GetBudget)
+	user.GET("/budgets/all", h.ListBudgets)
+	user.PUT("/budgets", h.UpsertBudget)
+	user.DELETE("/budgets", h.DeleteBudget)
+
+	// 预算（分类预算）
+	user.GET("/budgets/categories", h.ListCategoryBudgets)
+	user.PUT("/budgets/category", h.UpsertCategoryBudget)
+	user.DELETE("/budgets/category", h.DeleteCategoryBudget)
+
+	// 统计
+	user.GET("/stats/overview", h.Overview)
+	user.GET("/stats/by-category", h.ByCategory)
+	user.GET("/stats/trend", h.Trend)
+	user.GET("/stats/accounts", h.AccountStats)
+
+	// 导出
+	user.GET("/export", h.ExportBills)
+}
