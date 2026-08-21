@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ type billReq struct {
 	Amount     float64 `json:"amount"`
 	Note       string  `json:"note"`
 	OccurredAt string  `json:"occurred_at"`
+	TagIDs     []uint  `json:"tag_ids"`
 }
 
 // validate 校验并返回规范化后的账单。ok=false 表示校验失败。
@@ -91,6 +93,9 @@ func (h *Handler) ListBills(c *gin.Context) {
 	if accID := c.Query("account_id"); accID != "" {
 		q = q.Where("account_id = ?", accID)
 	}
+	if tagID := c.Query("tag_id"); tagID != "" {
+		q = q.Where("id IN (SELECT bill_id FROM bill_tags WHERE tag_id = ?)", tagID)
+	}
 	if kw := strings.TrimSpace(c.Query("keyword")); kw != "" {
 		q = q.Where("note LIKE ?", "%"+kw+"%")
 	}
@@ -113,7 +118,7 @@ func (h *Handler) ListBills(c *gin.Context) {
 		return
 	}
 	var bills []model.Bill
-	if err := q.Preload("Category").Preload("Account").
+	if err := q.Preload("Category").Preload("Account").Preload("Tags").
 		Order("occurred_at desc, id desc").
 		Offset((page - 1) * pageSize).Limit(pageSize).
 		Find(&bills).Error; err != nil {
@@ -161,7 +166,12 @@ func (h *Handler) CreateBill(c *gin.Context) {
 		fail(c, 500, "保存失败")
 		return
 	}
-	h.db.Preload("Category").Preload("Account").First(bill, bill.ID)
+	if err := h.setBillTags(bill.ID, cu.ID, req.TagIDs); err != nil {
+		h.db.Delete(bill)
+		fail(c, 400, err.Error())
+		return
+	}
+	h.db.Preload("Category").Preload("Account").Preload("Tags").First(bill, bill.ID)
 	c.JSON(201, bill)
 }
 
@@ -212,7 +222,11 @@ func (h *Handler) UpdateBill(c *gin.Context) {
 		fail(c, 500, "保存失败")
 		return
 	}
-	h.db.Preload("Category").Preload("Account").First(&bill, bill.ID)
+	if err := h.setBillTags(bill.ID, cu.ID, req.TagIDs); err != nil {
+		fail(c, 400, err.Error())
+		return
+	}
+	h.db.Preload("Category").Preload("Account").Preload("Tags").First(&bill, bill.ID)
 	c.JSON(200, bill)
 }
 
@@ -234,4 +248,45 @@ func (h *Handler) DeleteBill(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"ok": true})
+}
+
+// setBillTags 校验并替换账单标签（上限、归属校验）。
+func (h *Handler) setBillTags(billID, userID uint, tagIDs []uint) error {
+	tagIDs = dedupeTags(tagIDs)
+	if len(tagIDs) > model.MaxBillTags {
+		return fmt.Errorf("每笔账单最多添加 %d 个标签", model.MaxBillTags)
+	}
+	if err := h.db.Exec("DELETE FROM bill_tags WHERE bill_id = ?", billID).Error; err != nil {
+		return err
+	}
+	if len(tagIDs) == 0 {
+		return nil
+	}
+	var tags []model.Tag
+	if err := h.db.Where("id IN ? AND user_id = ?", tagIDs, userID).Find(&tags).Error; err != nil {
+		return err
+	}
+	if len(tags) != len(tagIDs) {
+		return fmt.Errorf("部分标签不存在或无权使用")
+	}
+	for _, t := range tags {
+		if err := h.db.Exec("INSERT INTO bill_tags (bill_id, tag_id) VALUES (?, ?)", billID, t.ID).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// dedupeTags 去重并保持顺序。
+func dedupeTags(ids []uint) []uint {
+	seen := map[uint]bool{}
+	out := make([]uint, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
 }

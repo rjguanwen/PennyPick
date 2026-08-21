@@ -14,6 +14,9 @@ const (
 	TypeIncome  = "income"  // 收入
 )
 
+// MaxBillTags 每条账单最多可添加的标签数。
+const MaxBillTags = 8
+
 // User 用户（个人记账：每个用户的数据相互隔离）。
 type User struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`
@@ -61,7 +64,27 @@ type Account struct {
 	UserID    uint      `gorm:"index;not null" json:"user_id"`
 	Name      string    `gorm:"size:32;not null" json:"name"`
 	Icon      string    `gorm:"size:32" json:"icon"`
+	IsCredit  bool      `gorm:"default:false" json:"is_credit"` // 是否先用后还（信用）账户
+	RepayDay  int       `gorm:"default:25" json:"repay_day"`    // 每月还款截止日（1-28）
 	SortOrder int       `json:"sort_order"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// Repayment 账户月度还款记录（标记某账户某月已还款）。
+type Repayment struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"uniqueIndex:uk_user_acc_month;not null" json:"user_id"`
+	AccountID uint      `gorm:"uniqueIndex:uk_user_acc_month;not null" json:"account_id"`
+	Month     string    `gorm:"size:7;uniqueIndex:uk_user_acc_month;not null" json:"month"` // YYYY-MM
+	Note      string    `gorm:"size:255" json:"note"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// Tag 账单标签（标签库属于用户，可被多条账单复用）。
+type Tag struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"index;not null" json:"user_id"`
+	Name      string    `gorm:"size:16;not null" json:"name"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -80,6 +103,7 @@ type Bill struct {
 
 	Category *Category `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
 	Account  *Account  `gorm:"foreignKey:AccountID" json:"account,omitempty"`
+	Tags     []Tag     `gorm:"many2many:bill_tags;" json:"tags,omitempty"`
 }
 
 // Budget 月度总预算（按月设置预警）。

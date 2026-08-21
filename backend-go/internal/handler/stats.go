@@ -238,6 +238,55 @@ type AccountStat struct {
 	Income    float64 `json:"income"`
 }
 
+// TagStat 标签维度统计。
+type TagStat struct {
+	TagID     uint    `json:"tag_id"`
+	Name      string  `json:"name"`
+	Total     float64 `json:"total"`
+	Percent   float64 `json:"percent"`
+	BillCount int     `json:"bill_count"`
+}
+
+// Tags 按标签统计（某月某类型）。
+func (h *Handler) Tags(c *gin.Context) {
+	cu := currentUser(c)
+	month := strings.TrimSpace(c.DefaultQuery("month", nowMonth()))
+	typ := c.DefaultQuery("type", model.TypeExpense)
+	start, end, ok := monthRange(month)
+	if !ok {
+		badRequest(c, "月份格式不正确")
+		return
+	}
+	var bills []model.Bill
+	h.db.Preload("Tags").
+		Where("user_id = ? AND type = ? AND occurred_at >= ? AND occurred_at < ?", cu.ID, typ, start, end).
+		Find(&bills)
+
+	agg := map[uint]*TagStat{}
+	var total float64
+	for _, b := range bills {
+		for _, t := range b.Tags {
+			s, exists := agg[t.ID]
+			if !exists {
+				s = &TagStat{TagID: t.ID, Name: t.Name}
+				agg[t.ID] = s
+			}
+			s.Total += b.Amount
+			s.BillCount++
+			total += b.Amount
+		}
+	}
+	list := make([]TagStat, 0, len(agg))
+	for _, s := range agg {
+		if total > 0 {
+			s.Percent = math.Round(s.Total/total*1000) / 10
+		}
+		list = append(list, *s)
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].Total > list[j].Total })
+	c.JSON(200, list)
+}
+
 // AccountStats 账户收支统计。
 func (h *Handler) AccountStats(c *gin.Context) {
 	cu := currentUser(c)

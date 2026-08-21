@@ -62,6 +62,24 @@
       <div ref="trendRef" class="chart trend"></div>
     </div>
 
+    <!-- 标签统计 -->
+    <div class="pp-card">
+      <div class="chart-head">
+        <span class="chart-title">标签统计</span>
+        <el-radio-group v-model="tagType" size="small" @change="loadTags">
+          <el-radio-button value="expense">支出</el-radio-button>
+          <el-radio-button value="income">收入</el-radio-button>
+        </el-radio-group>
+      </div>
+      <el-empty v-if="!tagsData.length" description="本月暂无标签数据" :image-size="50" />
+      <div v-for="t in tagsData" :key="t.tag_id" class="tag-row">
+        <el-tag size="small" type="info" effect="plain" class="tag-chip">{{ t.name }}</el-tag>
+        <span class="tag-count">{{ t.bill_count }} 笔</span>
+        <span class="tag-percent">{{ t.percent.toFixed(1) }}%</span>
+        <span class="tag-total" :class="tagType === 'income' ? 'money-income' : 'money-expense'">¥{{ formatMoney(t.total) }}</span>
+      </div>
+    </div>
+
     <!-- 账户统计 -->
     <div class="pp-card">
       <div class="chart-head">
@@ -89,6 +107,8 @@ const month = ref(currentMonth())
 const overview = ref({ expense_total: 0, income_total: 0, balance: 0 })
 const catType = ref('expense')
 const catData = ref([])
+const tagType = ref('expense')
+const tagsData = ref([])
 const trendGranularity = ref('month')
 const trendData = ref([])
 const accountsData = ref([])
@@ -109,7 +129,7 @@ function changeMonth(delta) {
 }
 
 async function loadAll() {
-  await Promise.all([loadOverview(), loadCategory(), loadTrend(), loadAccounts()])
+  await Promise.all([loadOverview(), loadCategory(), loadTags(), loadTrend(), loadAccounts()])
 }
 
 async function loadOverview() {
@@ -149,6 +169,12 @@ async function loadTrend() {
 async function loadAccounts() {
   try {
     accountsData.value = (await statsApi.accounts(month.value)) || []
+  } catch (e) {}
+}
+
+async function loadTags() {
+  try {
+    tagsData.value = (await statsApi.tags({ month: month.value, type: tagType.value })) || []
   } catch (e) {}
 }
 
@@ -316,6 +342,36 @@ onBeforeUnmount(() => {
 .cat-total {
   width: 110px;
   text-align: right;
+}
+.tag-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid #f2f3f5;
+  font-size: 14px;
+}
+.tag-row:last-child {
+  border-bottom: none;
+}
+.tag-chip {
+  flex-shrink: 0;
+}
+.tag-count {
+  color: #909399;
+  font-size: 12px;
+  width: 52px;
+}
+.tag-percent {
+  color: #909399;
+  font-size: 12px;
+  width: 56px;
+  text-align: right;
+}
+.tag-total {
+  flex: 1;
+  text-align: right;
+  font-weight: 600;
 }
 .acc-row {
   display: flex;

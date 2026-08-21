@@ -71,6 +71,21 @@
             <span class="info-label">备注</span>
             <el-input v-model="form.note" placeholder="备注：买了什么？" maxlength="255" clearable style="width: 220px" @keyup.enter="save" />
           </div>
+          <div class="info-row">
+            <span class="info-label">标签</span>
+            <el-select
+              v-model="form.tag_ids"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              :limit="maxBillTags"
+              placeholder="选择或输入新标签"
+              style="width: 220px"
+            >
+              <el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id" />
+            </el-select>
+          </div>
         </div>
 
         <div class="save-area">
@@ -88,12 +103,13 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElNotification } from 'element-plus'
-import { accountApi, billApi, budgetApi, categoryApi, statsApi } from '../api'
+import { accountApi, billApi, budgetApi, categoryApi, statsApi, tagApi } from '../api'
 import { formatMoney, nowDate } from '../utils/format'
 import CatIcon from '../components/CatIcon.vue'
 
 const router = useRouter()
 
+const maxBillTags = 8
 const amount = ref('')
 const saving = ref(false)
 const continueMode = ref(false)
@@ -103,10 +119,12 @@ const form = reactive({
   account_id: null,
   occurred_at: nowDate(),
   note: '',
+  tag_ids: [],
 })
 
 const categories = ref([])
 const accounts = ref([])
+const tags = ref([])
 
 const displayAmount = computed(() => {
   if (!amount.value) return '0'
@@ -150,13 +168,33 @@ function backspace() {
 }
 
 async function load() {
-  const [cats, accs] = await Promise.all([categoryApi.list(), accountApi.list()])
+  const [cats, accs, tgs] = await Promise.all([categoryApi.list(), accountApi.list(), tagApi.list()])
   categories.value = cats || []
   accounts.value = accs || []
+  tags.value = tgs || []
   if (!form.category_id) {
     const first = sortedCategories.value[0]
     if (first) form.category_id = first.id
   }
+}
+
+// 把 tag_ids 中的字符串（新建标签名）转为真实标签 id
+async function resolveTagIds() {
+  const ids = []
+  const newNames = []
+  for (const v of form.tag_ids || []) {
+    if (typeof v === 'number') {
+      ids.push(v)
+    } else if (typeof v === 'string') {
+      const n = v.trim()
+      if (n && !newNames.includes(n)) newNames.push(n)
+    }
+  }
+  for (const name of newNames) {
+    const tag = await tagApi.create({ name })
+    ids.push(tag.id)
+  }
+  return ids
 }
 
 async function save() {
@@ -171,6 +209,11 @@ async function save() {
   }
   saving.value = true
   try {
+    const tag_ids = await resolveTagIds()
+    if (tag_ids.length > maxBillTags) {
+      ElMessage.warning(`每条账单最多添加 ${maxBillTags} 个标签`)
+      return
+    }
     await billApi.create({
       type: form.type,
       amount: val,
@@ -178,6 +221,7 @@ async function save() {
       account_id: form.account_id,
       occurred_at: form.occurred_at,
       note: form.note,
+      tag_ids,
     })
 
     checkBudgetWarning()

@@ -50,7 +50,19 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	// 账户
 	user.GET("/accounts", h.ListAccounts)
 	user.POST("/accounts", h.CreateAccount)
+	user.PATCH("/accounts/:id", h.UpdateAccount)
 	user.DELETE("/accounts/:id", h.DeleteAccount)
+
+	// 还款
+	user.GET("/repayments", h.ListRepayments)
+	user.POST("/repayments", h.MarkRepayment)
+	user.DELETE("/repayments", h.UnmarkRepayment)
+
+	// 标签
+	user.GET("/tags", h.ListTags)
+	user.POST("/tags", h.CreateTag)
+	user.PATCH("/tags/:id", h.UpdateTag)
+	user.DELETE("/tags/:id", h.DeleteTag)
 
 	// 账单
 	user.GET("/bills", h.ListBills)
@@ -74,6 +86,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	user.GET("/stats/by-category", h.ByCategory)
 	user.GET("/stats/trend", h.Trend)
 	user.GET("/stats/accounts", h.AccountStats)
+	user.GET("/stats/tags", h.Tags)
 
 	// 导出
 	user.GET("/export", h.ExportBills)

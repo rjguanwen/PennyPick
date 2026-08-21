@@ -55,6 +55,22 @@
         </el-select>
       </el-form-item>
 
+      <el-form-item label="标签">
+        <el-select
+          v-model="form.tag_ids"
+          multiple
+          filterable
+          allow-create
+          default-first-option
+          :limit="maxBillTags"
+          placeholder="选择标签或输入新标签"
+          style="width: 100%"
+        >
+          <el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id" />
+        </el-select>
+        <div class="tag-tip">最多 {{ maxBillTags }} 个，可直接输入新名称创建</div>
+      </el-form-item>
+
       <el-form-item label="备注">
         <el-input v-model="form.note" maxlength="255" placeholder="备注（选填）" />
       </el-form-item>
@@ -70,14 +86,17 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { billApi } from '../api'
+import { billApi, tagApi } from '../api'
 import { nowDateTime } from '../utils/format'
+
+const maxBillTags = 8
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   bill: { type: Object, default: null }, // 编辑对象
   categories: { type: Array, default: () => [] },
   accounts: { type: Array, default: () => [] },
+  tags: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['update:modelValue', 'saved'])
 
@@ -89,6 +108,7 @@ const form = reactive({
   account_id: null,
   occurred_at: nowDateTime(),
   note: '',
+  tag_ids: [],
 })
 
 const visibleCategories = computed(() =>
@@ -111,6 +131,7 @@ function onOpen() {
     form.account_id = props.bill.account_id || null
     form.occurred_at = (props.bill.occurred_at || nowDateTime()).slice(0, 16)
     form.note = props.bill.note || ''
+    form.tag_ids = (props.bill.tags || []).map((t) => t.id)
   } else {
     form.type = 'expense'
     form.amount = null
@@ -118,7 +139,27 @@ function onOpen() {
     form.account_id = null
     form.occurred_at = nowDateTime()
     form.note = ''
+    form.tag_ids = []
   }
+}
+
+// 把 tag_ids 中的字符串（新建标签名）转为真实标签 id
+async function resolveTagIds() {
+  const ids = []
+  const newNames = []
+  for (const v of form.tag_ids || []) {
+    if (typeof v === 'number') {
+      ids.push(v)
+    } else if (typeof v === 'string') {
+      const n = v.trim()
+      if (n && !newNames.includes(n)) newNames.push(n)
+    }
+  }
+  for (const name of newNames) {
+    const tag = await tagApi.create({ name })
+    ids.push(tag.id)
+  }
+  return ids
 }
 
 async function save() {
@@ -132,6 +173,11 @@ async function save() {
   }
   saving.value = true
   try {
+    const tag_ids = await resolveTagIds()
+    if (tag_ids.length > maxBillTags) {
+      ElMessage.warning(`每条账单最多添加 ${maxBillTags} 个标签`)
+      return
+    }
     const payload = {
       type: form.type,
       amount: form.amount,
@@ -139,6 +185,7 @@ async function save() {
       account_id: form.account_id,
       occurred_at: form.occurred_at,
       note: form.note,
+      tag_ids,
     }
     if (props.bill) {
       await billApi.update(props.bill.id, payload)
@@ -162,5 +209,10 @@ async function save() {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+.tag-tip {
+  font-size: 12px;
+  color: #c0c4cc;
+  margin-top: 4px;
 }
 </style>

@@ -25,8 +25,10 @@ func (h *Handler) ListAccounts(c *gin.Context) {
 func (h *Handler) CreateAccount(c *gin.Context) {
 	cu := currentUser(c)
 	var req struct {
-		Name string `json:"name"`
-		Icon string `json:"icon"`
+		Name     string `json:"name"`
+		Icon     string `json:"icon"`
+		IsCredit bool   `json:"is_credit"`
+		RepayDay int    `json:"repay_day"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		badRequest(c, "请求参数有误")
@@ -37,6 +39,13 @@ func (h *Handler) CreateAccount(c *gin.Context) {
 		badRequest(c, "账户名称需为 1-32 个字符")
 		return
 	}
+	if req.IsCredit {
+		if req.RepayDay < 1 || req.RepayDay > 28 {
+			req.RepayDay = 25
+		}
+	} else {
+		req.RepayDay = 0
+	}
 	var maxSort int
 	h.db.Model(&model.Account{}).Where("user_id = ?", cu.ID).
 		Select("COALESCE(MAX(sort_order), 0)").Scan(&maxSort)
@@ -44,6 +53,8 @@ func (h *Handler) CreateAccount(c *gin.Context) {
 		UserID:    cu.ID,
 		Name:      req.Name,
 		Icon:      strings.TrimSpace(req.Icon),
+		IsCredit:  req.IsCredit,
+		RepayDay:  req.RepayDay,
 		SortOrder: maxSort + 1,
 	}
 	if err := h.db.Create(acc).Error; err != nil {
@@ -51,6 +62,52 @@ func (h *Handler) CreateAccount(c *gin.Context) {
 		return
 	}
 	c.JSON(201, acc)
+}
+
+// UpdateAccount 更新账户（名称/图标/是否信用账户/还款日）。
+func (h *Handler) UpdateAccount(c *gin.Context) {
+	cu := currentUser(c)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		badRequest(c, "账户不存在")
+		return
+	}
+	var acc model.Account
+	if err := h.db.Where("id = ? AND user_id = ?", id, cu.ID).First(&acc).Error; err != nil {
+		notFound(c, "账户不存在")
+		return
+	}
+	var req struct {
+		Name     string `json:"name"`
+		Icon     string `json:"icon"`
+		IsCredit bool   `json:"is_credit"`
+		RepayDay int    `json:"repay_day"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		badRequest(c, "请求参数有误")
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" || utf8.RuneCountInString(req.Name) > 32 {
+		badRequest(c, "账户名称需为 1-32 个字符")
+		return
+	}
+	acc.Name = req.Name
+	acc.Icon = strings.TrimSpace(req.Icon)
+	acc.IsCredit = req.IsCredit
+	if req.IsCredit {
+		if req.RepayDay < 1 || req.RepayDay > 28 {
+			req.RepayDay = 25
+		}
+		acc.RepayDay = req.RepayDay
+	} else {
+		acc.RepayDay = 0
+	}
+	if err := h.db.Save(&acc).Error; err != nil {
+		fail(c, 500, "保存失败")
+		return
+	}
+	c.JSON(200, acc)
 }
 
 // DeleteAccount 删除账户（已有账单时禁止）。

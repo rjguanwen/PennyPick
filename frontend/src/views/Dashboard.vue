@@ -13,6 +13,25 @@
       </div>
     </div>
 
+    <!-- 还款逾期提醒 -->
+    <el-alert
+      v-if="overdueAccounts.length"
+      type="error"
+      :closable="false"
+      show-icon
+      class="repay-alert"
+    >
+      <template #title>
+        <span>有 {{ overdueAccounts.length }} 个先用后还账户本月未标记还款：</span>
+        <el-button link type="danger" size="small" @click="router.push('/repayment')">去处理</el-button>
+      </template>
+      <div class="repay-alert-list">
+        <span v-for="o in overdueAccounts" :key="o.account.id" class="repay-chip">
+          {{ o.account.name }}（逾期 {{ o.overdue_by }} 天）
+        </span>
+      </div>
+    </el-alert>
+
     <!-- 统计卡片 -->
     <div class="stat-grid">
       <div class="pp-card stat-card expense">
@@ -150,7 +169,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { accountApi, billApi, budgetApi, categoryApi, statsApi } from '../api'
+import { accountApi, billApi, budgetApi, categoryApi, repaymentApi, statsApi } from '../api'
 import { useAuthStore } from '../stores/auth'
 import { currentMonth, formatMoney, shiftMonth } from '../utils/format'
 import CatIcon from '../components/CatIcon.vue'
@@ -165,6 +184,7 @@ const recentBills = ref([])
 const categories = ref([])
 const accounts = ref([])
 const loading = ref(false)
+const overdueAccounts = ref([])
 
 // 首页展示的分类预算（仅已设置预算的支出分类）
 const categoryBudgets = ref([])
@@ -242,6 +262,13 @@ async function load() {
   } finally {
     loading.value = false
   }
+  // 还款逾期提醒（针对当前真实月份）
+  try {
+    const reps = (await repaymentApi.list(currentMonth())) || []
+    overdueAccounts.value = reps.filter((i) => i.overdue)
+  } catch (e) {
+    overdueAccounts.value = []
+  }
 }
 
 onMounted(load)
@@ -287,6 +314,16 @@ onMounted(load)
 }
 .month-picker {
   width: 130px;
+}
+.repay-alert {
+  margin-bottom: 14px;
+}
+.repay-alert-list {
+  margin-top: 6px;
+}
+.repay-chip {
+  margin-right: 12px;
+  font-size: 13px;
 }
 .stat-grid {
   display: grid;

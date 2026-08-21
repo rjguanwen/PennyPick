@@ -74,6 +74,14 @@ func (a *Auth) currentUser(c *gin.Context) (*UserContext, bool) {
 	if tokenStr == "" || tokenStr == header {
 		return nil, false
 	}
+	return a.ParseUserFromToken(tokenStr)
+}
+
+// ParseUserFromToken 从 Bearer token 解析当前用户（供非 HTTP 场景复用）。
+func (a *Auth) ParseUserFromToken(tokenStr string) (*UserContext, bool) {
+	if tokenStr == "" {
+		return nil, false
+	}
 	claims := jwt.MapClaims{}
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {

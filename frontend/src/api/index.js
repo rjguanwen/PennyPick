@@ -60,7 +60,23 @@ export const categoryApi = {
 export const accountApi = {
   list: () => api.get('/accounts'),
   create: (data) => api.post('/accounts', data),
+  update: (id, data) => api.patch(`/accounts/${id}`, data),
   remove: (id) => api.delete(`/accounts/${id}`),
+}
+
+// ===== 还款 =====
+export const repaymentApi = {
+  list: (month) => api.get('/repayments', { params: { month } }),
+  mark: (data) => api.post('/repayments', data),
+  unmark: (month, accountId) => api.delete('/repayments', { params: { month, account_id: accountId } }),
+}
+
+// ===== 标签 =====
+export const tagApi = {
+  list: () => api.get('/tags'),
+  create: (data) => api.post('/tags', data),
+  update: (id, data) => api.patch(`/tags/${id}`, data),
+  remove: (id) => api.delete(`/tags/${id}`),
 }
 
 // ===== 账单 =====
@@ -91,6 +107,7 @@ export const statsApi = {
   byCategory: (params) => api.get('/stats/by-category', { params }),
   trend: (params) => api.get('/stats/trend', { params }),
   accounts: (month) => api.get('/stats/accounts', { params: { month } }),
+  tags: (params) => api.get('/stats/tags', { params }),
 }
 
 // ===== 导出 =====

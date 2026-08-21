@@ -26,6 +26,9 @@
       <el-select v-model="filters.category_id" placeholder="分类" clearable size="small" class="filter-cat" @change="resetAndLoad">
         <el-option v-for="c in allCategories" :key="c.id" :label="c.name" :value="c.id" />
       </el-select>
+      <el-select v-model="filters.tag_id" placeholder="标签" clearable size="small" class="filter-tag" @change="resetAndLoad">
+        <el-option v-for="t in allTags" :key="t.id" :label="t.name" :value="t.id" />
+      </el-select>
       <el-input v-model="filters.keyword" placeholder="搜备注" size="small" clearable class="filter-kw" @keyup.enter="resetAndLoad" @clear="resetAndLoad" />
       <el-button type="primary" size="small" @click="resetAndLoad">查询</el-button>
     </div>
@@ -47,6 +50,9 @@
             <div class="bill-main">
               <div class="bill-name">{{ b.category?.name || '未知' }}</div>
               <div class="bill-note">{{ b.note || '' }}<span v-if="b.account" class="bill-acc">{{ b.account.name }}</span></div>
+              <div v-if="b.tags && b.tags.length" class="bill-tags">
+                <el-tag v-for="t in b.tags" :key="t.id" size="small" type="info" effect="plain" class="bill-tag">{{ t.name }}</el-tag>
+              </div>
             </div>
             <div class="bill-right">
               <span class="bill-amount" :class="b.type === 'income' ? 'money-income' : 'money-expense'">
@@ -63,7 +69,7 @@
       </div>
     </div>
 
-    <BillFormDialog v-model="editVisible" :bill="editingBill" :categories="allCategories" :accounts="accounts" @saved="load(true)" />
+    <BillFormDialog v-model="editVisible" :bill="editingBill" :categories="allCategories" :accounts="accounts" :tags="allTags" @saved="load(true)" />
   </div>
 </template>
 
@@ -72,7 +78,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import { accountApi, billApi, categoryApi } from '../api'
+import { accountApi, billApi, categoryApi, tagApi } from '../api'
 import { currentMonth, dateLabel, formatMoney, shiftMonth } from '../utils/format'
 import CatIcon from '../components/CatIcon.vue'
 import BillFormDialog from '../components/BillFormDialog.vue'
@@ -80,11 +86,12 @@ import BillFormDialog from '../components/BillFormDialog.vue'
 const router = useRouter()
 
 const month = ref(currentMonth())
-const filters = reactive({ type: '', category_id: null, keyword: '' })
+const filters = reactive({ type: '', category_id: null, tag_id: null, keyword: '' })
 
 const bills = ref([])
 const allCategories = ref([])
 const accounts = ref([])
+const allTags = ref([])
 const page = ref(1)
 const pageSize = 50
 const total = ref(0)
@@ -124,6 +131,7 @@ function buildParams(pageNum) {
     month: month.value,
     type: filters.type || undefined,
     category_id: filters.category_id || undefined,
+    tag_id: filters.tag_id || undefined,
     keyword: filters.keyword || undefined,
     page: pageNum,
     page_size: pageSize,
@@ -175,9 +183,10 @@ async function remove(bill) {
 }
 
 onMounted(async () => {
-  const [cats, accs] = await Promise.all([categoryApi.list(), accountApi.list()])
+  const [cats, accs, tags] = await Promise.all([categoryApi.list(), accountApi.list(), tagApi.list()])
   allCategories.value = cats || []
   accounts.value = accs || []
+  allTags.value = tags || []
   load(true)
 })
 </script>
@@ -236,8 +245,20 @@ onMounted(async () => {
 .filter-cat {
   width: 110px;
 }
+.filter-tag {
+  width: 120px;
+}
 .filter-kw {
   width: 140px;
+}
+.bill-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+.bill-tag {
+  border-radius: 6px;
 }
 .list-card {
   padding: 8px 16px;
