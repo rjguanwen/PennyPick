@@ -21,6 +21,7 @@
         <el-menu-item index="/stats"><el-icon><DataAnalysis /></el-icon><span>统计</span></el-menu-item>
         <el-menu-item index="/budget"><el-icon><Odometer /></el-icon><span>预算</span></el-menu-item>
         <el-menu-item index="/categories"><el-icon><Grid /></el-icon><span>分类管理</span></el-menu-item>
+        <el-menu-item index="/accounts"><el-icon><Wallet /></el-icon><span>账户管理</span></el-menu-item>
         <el-menu-item index="/settings"><el-icon><Setting /></el-icon><span>设置</span></el-menu-item>
       </el-menu>
       <div class="aside-footer">

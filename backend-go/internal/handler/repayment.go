@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -24,8 +23,27 @@ type RepaymentItem struct {
 	DueDay       int            `json:"due_day"`
 	Overdue      bool           `json:"overdue"`
 	OverdueBy    int            `json:"overdue_by"`    // 逾期天数
-	MonthExpense float64        `json:"month_expense"` // 本月该账户支出总额
-	HasExpense   bool           `json:"has_expense"`   // 本月该账户是否有支出
+	MonthExpense float64        `json:"month_expense"` // 本期账单应还金额（账期内支出总额）
+	HasExpense   bool           `json:"has_expense"`   // 本期是否有支出
+	BillingStart string         `json:"billing_start"` // 本期账期开始（YYYY-MM-DD）
+	BillingEnd   string         `json:"billing_end"`   // 本期账期结束（YYYY-MM-DD，不含）
+}
+
+// billingRange 返回查看月份 month（YYYY-MM）对应的账期 [start, end)。
+// 账期 = 上月出账日 ~ 本月出账日；statementDay 未设置（<=0 或非法）时按自然月。
+func billingRange(month string, statementDay int) (time.Time, time.Time, bool) {
+	t, err := time.ParseInLocation("2006-01", month, time.Local)
+	if err != nil {
+		return time.Time{}, time.Time{}, false
+	}
+	first := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.Local)
+	if statementDay < 1 || statementDay > 28 {
+		return first, first.AddDate(0, 1, 0), true // 自然月账期
+	}
+	prevFirst := first.AddDate(0, -1, 0)
+	start := time.Date(prevFirst.Year(), prevFirst.Month(), statementDay, 0, 0, 0, 0, time.Local)
+	end := time.Date(first.Year(), first.Month(), statementDay, 0, 0, 0, 0, time.Local)
+	return start, end, true
 }
 
 // ListRepayments 某月各信用账户的还款状态（按 sort_order 排序）。
@@ -40,25 +58,20 @@ func (h *Handler) ListRepayments(c *gin.Context) {
 	h.db.Where("user_id = ? AND is_credit = ?", cu.ID, true).
 		Order("sort_order asc, id asc").Find(&accounts)
 
-	// 该月各账户支出总额（仅支出类型，用于判断是否需要还款）
+	// 各账户本期账期内的支出总额（按各自出账日，用于判断是否需要还款）
 	expenseMap := map[uint]float64{}
 	if len(accounts) > 0 {
-		start, end, _ := monthRange(month)
-		ids := make([]uint, 0, len(accounts))
 		for _, a := range accounts {
-			ids = append(ids, a.ID)
-		}
-		var rows []struct {
-			AccountID uint
-			Total     float64
-		}
-		h.db.Model(&model.Bill{}).
-			Select("account_id, COALESCE(SUM(amount), 0) as total").
-			Where("user_id = ? AND type = ? AND account_id IN ? AND occurred_at >= ? AND occurred_at < ?",
-				cu.ID, model.TypeExpense, ids, start, end).
-			Group("account_id").Scan(&rows)
-		for _, r := range rows {
-			expenseMap[r.AccountID] = r.Total
+			start, end, ok := billingRange(month, a.StatementDay)
+			if !ok {
+				continue
+			}
+			var total float64
+			h.db.Model(&model.Bill{}).
+				Where("user_id = ? AND type = ? AND account_id = ? AND occurred_at >= ? AND occurred_at < ?",
+					cu.ID, model.TypeExpense, a.ID, start, end).
+				Select("COALESCE(SUM(amount), 0)").Scan(&total)
+			expenseMap[a.ID] = total
 		}
 	}
 
@@ -72,12 +85,15 @@ func (h *Handler) ListRepayments(c *gin.Context) {
 	todayMonth := today.Format("2006-01")
 	items := make([]RepaymentItem, 0, len(accounts))
 	for _, acc := range accounts {
+		bStart, bEnd, _ := billingRange(month, acc.StatementDay)
 		expense := model.Round2(expenseMap[acc.ID])
 		item := RepaymentItem{
 			Account:      &acc,
 			DueDay:       acc.RepayDay,
 			MonthExpense: expense,
 			HasExpense:   expense > 0,
+			BillingStart: bStart.Format("2006-01-02"),
+			BillingEnd:   bEnd.Format("2006-01-02"),
 		}
 		if r, ok := repMap[acc.ID]; ok {
 			item.Repaid = true
@@ -89,7 +105,7 @@ func (h *Handler) ListRepayments(c *gin.Context) {
 				item.Status = model.RepayStatusFull
 			}
 		} else if item.HasExpense && month == todayMonth && acc.RepayDay > 0 && today.Day() > acc.RepayDay {
-			// 仅当月且有支出时判定逾期
+			// 仅当月且有支出时判定逾期（超过本月还款日）
 			item.Overdue = true
 			item.OverdueBy = today.Day() - acc.RepayDay
 		}
@@ -100,9 +116,9 @@ func (h *Handler) ListRepayments(c *gin.Context) {
 
 // MarkRepayment 标记某账户某月已还款（幂等）。
 // 需录入实际还款金额 amount：
-//   - amount > 当月账单合计：自动补录一张「其他」分类的差额账单（备注：补差：小额消费合计），使账单合计与实际还款一致；
-//   - amount < 当月账单合计：标记为部分还款（partial）；
-//   - amount == 当月账单合计（或未录入）：标记为全额还款（full）。
+//   - amount > 本期应还（账期内支出合计）：自动补录一张「其他」分类的差额账单（备注：补差：小额消费合计），使账单合计与实际还款一致；
+//   - amount < 本期应还：标记为部分还款（partial）；
+//   - amount == 本期应还（或未录入）：标记为全额还款（full）。
 func (h *Handler) MarkRepayment(c *gin.Context) {
 	cu := currentUser(c)
 	var req struct {
@@ -127,8 +143,12 @@ func (h *Handler) MarkRepayment(c *gin.Context) {
 		return
 	}
 
-	start, end, _ := monthRange(req.Month)
-	// 当月账单合计（含此前可能的补差账单，重新计算后保持一致）
+	start, end, ok := billingRange(req.Month, acc.StatementDay)
+	if !ok {
+		badRequest(c, "月份格式不正确")
+		return
+	}
+	// 本期应还金额（账期内支出合计）
 	var expenseTotal float64
 	h.db.Model(&model.Bill{}).
 		Where("user_id = ? AND account_id = ? AND type = ? AND occurred_at >= ? AND occurred_at < ?",
@@ -144,29 +164,20 @@ func (h *Handler) MarkRepayment(c *gin.Context) {
 	status := model.RepayStatusFull
 	diffAmount := 0.0
 
-	// 先清除该月已有的补差账单，保证重复标记/修改金额时结果一致
+	// 先清除该账期内已有的补差账单，保证重复标记/修改金额时结果一致
 	h.db.Where("user_id = ? AND account_id = ? AND type = ? AND note = ? AND occurred_at >= ? AND occurred_at < ?",
 		cu.ID, acc.ID, model.TypeExpense, diffBillNote, start, end).
 		Delete(&model.Bill{})
 
 	if amount > expenseTotal {
-		// 实际还款大于明细合计：补差账单
+		// 实际还款大于本期应还：补差账单（日期取账期内最后一天）
 		diffAmount = model.Round2(amount - expenseTotal)
 		cat, err := h.otherCategory(cu.ID)
 		if err != nil {
 			fail(c, 500, "未找到「其他」分类")
 			return
 		}
-		// 账单日期取该月还款截止日（保证在还款周期内；截止日缺省用 1 号）
-		day := acc.RepayDay
-		if day < 1 || day > 28 {
-			day = 1
-		}
-		ocTime, err := parseDate(fmt.Sprintf("%s-%02d", req.Month, day))
-		if err != nil {
-			fail(c, 500, "生成补差账单日期失败")
-			return
-		}
+		diffDate := end.AddDate(0, 0, -1)
 		diffBill := &model.Bill{
 			UserID:     cu.ID,
 			AccountID:  &acc.ID,
@@ -174,7 +185,7 @@ func (h *Handler) MarkRepayment(c *gin.Context) {
 			Type:       model.TypeExpense,
 			Amount:     diffAmount,
 			Note:       diffBillNote,
-			OccurredAt: model.DateTime{Time: ocTime},
+			OccurredAt: model.DateTime{Time: diffDate},
 		}
 		if err := h.db.Create(diffBill).Error; err != nil {
 			fail(c, 500, "补差账单创建失败")
@@ -212,17 +223,19 @@ func (h *Handler) MarkRepayment(c *gin.Context) {
 		}
 	}
 	c.JSON(200, gin.H{
-		"ok":           true,
-		"status":       status,
-		"amount":       amount,
-		"diff_bill":    diffAmount > 0,
-		"diff_amount":  diffAmount,
+		"ok":            true,
+		"status":        status,
+		"amount":        amount,
+		"diff_bill":     diffAmount > 0,
+		"diff_amount":   diffAmount,
 		"month_expense": model.Round2(expenseTotal + diffAmount),
+		"billing_start": start.Format("2006-01-02"),
+		"billing_end":   end.Format("2006-01-02"),
 	})
 }
 
 // UnmarkRepayment 取消某账户某月的还款标记。
-// 同时移除该月由标记还款产生的补差账单，避免数据残留。
+// 同时移除该账期内的补差账单，避免数据残留。
 func (h *Handler) UnmarkRepayment(c *gin.Context) {
 	cu := currentUser(c)
 	month := strings.TrimSpace(c.Query("month"))
@@ -235,16 +248,23 @@ func (h *Handler) UnmarkRepayment(c *gin.Context) {
 		badRequest(c, "月份格式不正确")
 		return
 	}
+	var acc model.Account
+	if err := h.db.Where("id = ? AND user_id = ?", accountID, cu.ID).First(&acc).Error; err != nil {
+		notFound(c, "账户不存在")
+		return
+	}
 	if err := h.db.Where("user_id = ? AND account_id = ? AND month = ?", cu.ID, accountID, month).
 		Delete(&model.Repayment{}).Error; err != nil {
 		fail(c, 500, "取消失败")
 		return
 	}
-	// 清理该月补差账单
-	start, end, _ := monthRange(month)
-	h.db.Where("user_id = ? AND account_id = ? AND type = ? AND note = ? AND occurred_at >= ? AND occurred_at < ?",
-		cu.ID, accountID, model.TypeExpense, diffBillNote, start, end).
-		Delete(&model.Bill{})
+	// 清理该账期补差账单
+	start, end, ok := billingRange(month, acc.StatementDay)
+	if ok {
+		h.db.Where("user_id = ? AND account_id = ? AND type = ? AND note = ? AND occurred_at >= ? AND occurred_at < ?",
+			cu.ID, accountID, model.TypeExpense, diffBillNote, start, end).
+			Delete(&model.Bill{})
+	}
 	c.JSON(200, gin.H{"ok": true})
 }
 

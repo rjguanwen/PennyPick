@@ -23,7 +23,7 @@
       :closable="false"
       show-icon
       class="overdue-alert"
-      :title="`有 ${overdueList.length} 个账户本月尚未标记还款`"
+      :title="`有 ${overdueList.length} 个账户本期尚未标记还款`"
     >
       <div class="overdue-list">
         <span v-for="o in overdueList" :key="o.account.id" class="overdue-chip">
@@ -34,10 +34,10 @@
     <el-alert v-else-if="creditCount === 0" type="info" :closable="false" show-icon title="还没有先用后还的账户"
       description="可在「设置 → 账户管理」新建账户时勾选「先用后还」并设置每月还款日，或编辑已有账户。"
     />
-    <el-alert v-else-if="repaidCount === creditCount" type="success" :closable="false" show-icon title="本月所有信用账户均已标记还款" />
-    <el-alert v-else-if="pendingCount === 0 && repaidCount > 0" type="success" :closable="false" show-icon title="本月先用后还账户均已还清" />
-    <el-alert v-else-if="pendingCount === 0" type="success" :closable="false" show-icon title="本月先用后还账户均无支出，无需还款" />
-    <el-alert v-else type="warning" :closable="false" show-icon :title="`本月还有 ${pendingCount} 个账户待还款`" />
+    <el-alert v-else-if="repaidCount === creditCount" type="success" :closable="false" show-icon title="本期所有信用账户均已标记还款" />
+    <el-alert v-else-if="pendingCount === 0 && repaidCount > 0" type="success" :closable="false" show-icon title="本期先用后还账户均已还清" />
+    <el-alert v-else-if="pendingCount === 0" type="success" :closable="false" show-icon title="本期先用后还账户均无支出，无需还款" />
+    <el-alert v-else type="warning" :closable="false" show-icon :title="`本期还有 ${pendingCount} 个账户待还款`" />
 
     <!-- 账户列表 -->
     <div v-loading="loading" class="list">
@@ -45,13 +45,14 @@
         <div class="acc-icon"><el-icon :size="24"><component :is="item.account.icon || 'Wallet'" /></el-icon></div>
         <div class="acc-info">
           <div class="acc-name">{{ item.account.name }}</div>
-          <div class="acc-due">每月 {{ item.account.repay_day }} 日前还款 · 本月支出 ¥{{ formatMoney(item.month_expense) }}</div>
+          <div class="acc-due">本期账单 {{ fmtBillingRange(item) }}</div>
+          <div class="acc-due">应还 ¥{{ formatMoney(item.month_expense) }} · 每月 {{ item.account.repay_day }} 日前还款</div>
         </div>
         <div class="acc-status">
           <el-tag v-if="item.repaid && item.status === 'partial'" type="warning" effect="light">部分还款</el-tag>
           <el-tag v-else-if="item.repaid" type="success" effect="light">已还款</el-tag>
           <el-tag v-else-if="item.overdue" type="danger" effect="light">逾期 {{ item.overdue_by }} 天</el-tag>
-          <el-tag v-else-if="!item.has_expense" type="info" effect="plain">本月无支出</el-tag>
+          <el-tag v-else-if="!item.has_expense" type="info" effect="plain">本期无支出</el-tag>
           <el-tag v-else type="info" effect="plain">待还款</el-tag>
         </div>
         <div class="acc-time" v-if="item.repaid">
@@ -77,7 +78,7 @@
         <el-input-number v-model="markForm.amount" :min="0" :precision="2" :step="10" controls-position="right" style="width: 180px" />
       </div>
       <div class="mark-tip">
-        本月账单合计 ¥{{ current ? formatMoney(current.month_expense) : '0.00' }}。实际还款大于合计将自动补录差额账单；小于合计则标记为部分还款。
+        本期账单（{{ current ? fmtBillingRange(current) : '' }}）应还 ¥{{ current ? formatMoney(current.month_expense) : '0.00' }}。实际还款大于应还将自动补录差额账单；小于则标记为部分还款。
       </div>
       <el-input v-model="markForm.note" placeholder="备注（可选），如 还款渠道" maxlength="255" clearable class="mark-note" />
       <template #footer>
@@ -116,6 +117,18 @@ const overdueList = computed(() => items.value.filter((i) => i.overdue))
 function fmtTime(t) {
   if (!t) return ''
   return t.slice(0, 10)
+}
+
+function shortDate(d) {
+  if (!d) return ''
+  const parts = d.split('-')
+  if (parts.length < 3) return d
+  return `${Number(parts[1])}月${Number(parts[2])}日`
+}
+
+function fmtBillingRange(item) {
+  if (!item || !item.billing_start || !item.billing_end) return ''
+  return `${shortDate(item.billing_start)} ~ ${shortDate(item.billing_end)}`
 }
 
 function changeMonth(delta) {

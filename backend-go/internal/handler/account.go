@@ -25,10 +25,11 @@ func (h *Handler) ListAccounts(c *gin.Context) {
 func (h *Handler) CreateAccount(c *gin.Context) {
 	cu := currentUser(c)
 	var req struct {
-		Name     string `json:"name"`
-		Icon     string `json:"icon"`
-		IsCredit bool   `json:"is_credit"`
-		RepayDay int    `json:"repay_day"`
+		Name         string `json:"name"`
+		Icon         string `json:"icon"`
+		IsCredit     bool   `json:"is_credit"`
+		StatementDay int    `json:"statement_day"`
+		RepayDay     int    `json:"repay_day"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		badRequest(c, "请求参数有误")
@@ -40,22 +41,27 @@ func (h *Handler) CreateAccount(c *gin.Context) {
 		return
 	}
 	if req.IsCredit {
+		if req.StatementDay < 1 || req.StatementDay > 28 {
+			req.StatementDay = 1
+		}
 		if req.RepayDay < 1 || req.RepayDay > 28 {
 			req.RepayDay = 25
 		}
 	} else {
+		req.StatementDay = 0
 		req.RepayDay = 0
 	}
 	var maxSort int
 	h.db.Model(&model.Account{}).Where("user_id = ?", cu.ID).
 		Select("COALESCE(MAX(sort_order), 0)").Scan(&maxSort)
 	acc := &model.Account{
-		UserID:    cu.ID,
-		Name:      req.Name,
-		Icon:      strings.TrimSpace(req.Icon),
-		IsCredit:  req.IsCredit,
-		RepayDay:  req.RepayDay,
-		SortOrder: maxSort + 1,
+		UserID:       cu.ID,
+		Name:         req.Name,
+		Icon:         strings.TrimSpace(req.Icon),
+		IsCredit:     req.IsCredit,
+		StatementDay: req.StatementDay,
+		RepayDay:     req.RepayDay,
+		SortOrder:    maxSort + 1,
 	}
 	if err := h.db.Create(acc).Error; err != nil {
 		fail(c, 500, "创建账户失败")
@@ -78,10 +84,11 @@ func (h *Handler) UpdateAccount(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Name     string `json:"name"`
-		Icon     string `json:"icon"`
-		IsCredit bool   `json:"is_credit"`
-		RepayDay int    `json:"repay_day"`
+		Name         string `json:"name"`
+		Icon         string `json:"icon"`
+		IsCredit     bool   `json:"is_credit"`
+		StatementDay int    `json:"statement_day"`
+		RepayDay     int    `json:"repay_day"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		badRequest(c, "请求参数有误")
@@ -96,11 +103,16 @@ func (h *Handler) UpdateAccount(c *gin.Context) {
 	acc.Icon = strings.TrimSpace(req.Icon)
 	acc.IsCredit = req.IsCredit
 	if req.IsCredit {
+		if req.StatementDay < 1 || req.StatementDay > 28 {
+			req.StatementDay = 1
+		}
 		if req.RepayDay < 1 || req.RepayDay > 28 {
 			req.RepayDay = 25
 		}
+		acc.StatementDay = req.StatementDay
 		acc.RepayDay = req.RepayDay
 	} else {
+		acc.StatementDay = 0
 		acc.RepayDay = 0
 	}
 	if err := h.db.Save(&acc).Error; err != nil {

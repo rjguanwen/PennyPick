@@ -60,14 +60,15 @@ type Category struct {
 
 // Account 账户。
 type Account struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	UserID    uint      `gorm:"index;not null" json:"user_id"`
-	Name      string    `gorm:"size:32;not null" json:"name"`
-	Icon      string    `gorm:"size:32" json:"icon"`
-	IsCredit  bool      `gorm:"default:false" json:"is_credit"` // 是否先用后还（信用）账户
-	RepayDay  int       `gorm:"default:25" json:"repay_day"`    // 每月还款截止日（1-28）
-	SortOrder int       `json:"sort_order"`
-	CreatedAt time.Time `json:"created_at"`
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	UserID       uint      `gorm:"index;not null" json:"user_id"`
+	Name         string    `gorm:"size:32;not null" json:"name"`
+	Icon         string    `gorm:"size:32" json:"icon"`
+	IsCredit     bool      `gorm:"default:false" json:"is_credit"`      // 是否先用后还（信用）账户
+	StatementDay int       `gorm:"default:1" json:"statement_day"`      // 每月出账日/账单日（1-28，0 表示未设置按自然月）
+	RepayDay     int       `gorm:"default:25" json:"repay_day"`         // 每月还款截止日（1-28）
+	SortOrder    int       `json:"sort_order"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // 还款状态

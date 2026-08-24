@@ -19,6 +19,7 @@ const routes = [
       { path: 'stats', name: 'stats', component: () => import('../views/Stats.vue'), meta: { title: '统计' } },
       { path: 'budget', name: 'budget', component: () => import('../views/Budget.vue'), meta: { title: '预算' } },
       { path: 'categories', name: 'categories', component: () => import('../views/CategoryManage.vue'), meta: { title: '分类管理' } },
+      { path: 'accounts', name: 'accounts', component: () => import('../views/AccountManage.vue'), meta: { title: '账户管理' } },
       { path: 'settings', name: 'settings', component: () => import('../views/Settings.vue'), meta: { title: '设置' } },
     ],
   },
