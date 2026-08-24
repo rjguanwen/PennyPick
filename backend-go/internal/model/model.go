@@ -70,12 +70,20 @@ type Account struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// 还款状态
+const (
+	RepayStatusFull    = "full"    // 已全额还清
+	RepayStatusPartial = "partial" // 部分还款（未彻底还清）
+)
+
 // Repayment 账户月度还款记录（标记某账户某月已还款）。
 type Repayment struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	UserID    uint      `gorm:"uniqueIndex:uk_user_acc_month;not null" json:"user_id"`
 	AccountID uint      `gorm:"uniqueIndex:uk_user_acc_month;not null" json:"account_id"`
 	Month     string    `gorm:"size:7;uniqueIndex:uk_user_acc_month;not null" json:"month"` // YYYY-MM
+	Amount    float64   `json:"amount"`                                                    // 实际还款金额
+	Status    string    `gorm:"size:8;default:full" json:"status"`                         // full 全额 / partial 部分
 	Note      string    `gorm:"size:255" json:"note"`
 	CreatedAt time.Time `json:"created_at"`
 }

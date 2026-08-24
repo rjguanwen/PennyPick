@@ -3,7 +3,9 @@ package database
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"golang.org/x/crypto/bcrypt"
@@ -18,7 +20,12 @@ import (
 func Open(cfg *config.Config) (*gorm.DB, error) {
 	dsn := strings.TrimPrefix(cfg.DatabaseURL, "sqlite:///")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger: logger.New(log.New(os.Stdout, "\r\n", log.LstdFlags), logger.Config{
+			SlowThreshold:             200 * time.Millisecond,
+			LogLevel:                  logger.Warn,
+			IgnoreRecordNotFoundError: true, // 记录不存在不视为错误，避免日志刷屏
+			Colorful:                  false,
+		}),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)

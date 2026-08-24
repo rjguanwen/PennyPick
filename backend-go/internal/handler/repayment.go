@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -9,15 +10,20 @@ import (
 	"pennypickbackend/internal/model"
 )
 
+// diffBillNote 补差账单的固定备注。
+const diffBillNote = "补差：小额消费合计"
+
 // RepaymentItem 单个信用账户的还款状态。
 type RepaymentItem struct {
 	Account      *model.Account `json:"account"`
 	Repaid       bool           `json:"repaid"`
 	RepaidAt     *time.Time     `json:"repaid_at"`
 	Note         string         `json:"note"`
+	Amount       float64        `json:"amount"`        // 实际还款金额
+	Status       string         `json:"status"`        // full 全额 / partial 部分
 	DueDay       int            `json:"due_day"`
 	Overdue      bool           `json:"overdue"`
-	OverdueBy    int            `json:"overdue_by"` // 逾期天数
+	OverdueBy    int            `json:"overdue_by"`    // 逾期天数
 	MonthExpense float64        `json:"month_expense"` // 本月该账户支出总额
 	HasExpense   bool           `json:"has_expense"`   // 本月该账户是否有支出
 }
@@ -77,6 +83,11 @@ func (h *Handler) ListRepayments(c *gin.Context) {
 			item.Repaid = true
 			item.RepaidAt = &r.CreatedAt
 			item.Note = r.Note
+			item.Amount = r.Amount
+			item.Status = r.Status
+			if item.Status == "" {
+				item.Status = model.RepayStatusFull
+			}
 		} else if item.HasExpense && month == todayMonth && acc.RepayDay > 0 && today.Day() > acc.RepayDay {
 			// 仅当月且有支出时判定逾期
 			item.Overdue = true
@@ -87,13 +98,18 @@ func (h *Handler) ListRepayments(c *gin.Context) {
 	c.JSON(200, items)
 }
 
-// MarkRepayment 标记某账户某月已还款（幂等：重复标记仅更新备注）。
+// MarkRepayment 标记某账户某月已还款（幂等）。
+// 需录入实际还款金额 amount：
+//   - amount > 当月账单合计：自动补录一张「其他」分类的差额账单（备注：补差：小额消费合计），使账单合计与实际还款一致；
+//   - amount < 当月账单合计：标记为部分还款（partial）；
+//   - amount == 当月账单合计（或未录入）：标记为全额还款（full）。
 func (h *Handler) MarkRepayment(c *gin.Context) {
 	cu := currentUser(c)
 	var req struct {
-		AccountID uint   `json:"account_id"`
-		Month     string `json:"month"`
-		Note      string `json:"note"`
+		AccountID uint    `json:"account_id"`
+		Month     string  `json:"month"`
+		Amount    float64 `json:"amount"`
+		Note      string  `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		badRequest(c, "请求参数有误")
@@ -110,32 +126,103 @@ func (h *Handler) MarkRepayment(c *gin.Context) {
 		badRequest(c, "账户不存在或非信用账户")
 		return
 	}
+
+	start, end, _ := monthRange(req.Month)
+	// 当月账单合计（含此前可能的补差账单，重新计算后保持一致）
+	var expenseTotal float64
+	h.db.Model(&model.Bill{}).
+		Where("user_id = ? AND account_id = ? AND type = ? AND occurred_at >= ? AND occurred_at < ?",
+			cu.ID, acc.ID, model.TypeExpense, start, end).
+		Select("COALESCE(SUM(amount), 0)").Scan(&expenseTotal)
+	expenseTotal = model.Round2(expenseTotal)
+
+	amount := model.Round2(req.Amount)
+	if amount < 0 {
+		amount = 0
+	}
 	note := strings.TrimSpace(req.Note)
+	status := model.RepayStatusFull
+	diffAmount := 0.0
+
+	// 先清除该月已有的补差账单，保证重复标记/修改金额时结果一致
+	h.db.Where("user_id = ? AND account_id = ? AND type = ? AND note = ? AND occurred_at >= ? AND occurred_at < ?",
+		cu.ID, acc.ID, model.TypeExpense, diffBillNote, start, end).
+		Delete(&model.Bill{})
+
+	if amount > expenseTotal {
+		// 实际还款大于明细合计：补差账单
+		diffAmount = model.Round2(amount - expenseTotal)
+		cat, err := h.otherCategory(cu.ID)
+		if err != nil {
+			fail(c, 500, "未找到「其他」分类")
+			return
+		}
+		// 账单日期取该月还款截止日（保证在还款周期内；截止日缺省用 1 号）
+		day := acc.RepayDay
+		if day < 1 || day > 28 {
+			day = 1
+		}
+		ocTime, err := parseDate(fmt.Sprintf("%s-%02d", req.Month, day))
+		if err != nil {
+			fail(c, 500, "生成补差账单日期失败")
+			return
+		}
+		diffBill := &model.Bill{
+			UserID:     cu.ID,
+			AccountID:  &acc.ID,
+			CategoryID: cat.ID,
+			Type:       model.TypeExpense,
+			Amount:     diffAmount,
+			Note:       diffBillNote,
+			OccurredAt: model.DateTime{Time: ocTime},
+		}
+		if err := h.db.Create(diffBill).Error; err != nil {
+			fail(c, 500, "补差账单创建失败")
+			return
+		}
+	} else if amount > 0 && amount < expenseTotal {
+		// 部分还款
+		status = model.RepayStatusPartial
+	}
+
 	var existing model.Repayment
-	if err := h.db.Where("user_id = ? AND account_id = ? AND month = ?", cu.ID, acc.ID, req.Month).
-		First(&existing).Error; err == nil {
+	// 用 Find 判断是否已存在，避免 First 在记录不存在时产生 ErrRecordNotFound 日志
+	h.db.Where("user_id = ? AND account_id = ? AND month = ?", cu.ID, acc.ID, req.Month).
+		Limit(1).Find(&existing)
+	if existing.ID > 0 {
+		existing.Amount = amount
+		existing.Status = status
 		existing.Note = note
 		if err := h.db.Save(&existing).Error; err != nil {
 			fail(c, 500, "保存失败")
 			return
 		}
-		c.JSON(200, existing)
-		return
+	} else {
+		rep := &model.Repayment{
+			UserID:    cu.ID,
+			AccountID: acc.ID,
+			Month:     req.Month,
+			Amount:    amount,
+			Status:    status,
+			Note:      note,
+		}
+		if err := h.db.Create(rep).Error; err != nil {
+			fail(c, 500, "保存失败")
+			return
+		}
 	}
-	rep := &model.Repayment{
-		UserID:    cu.ID,
-		AccountID: acc.ID,
-		Month:     req.Month,
-		Note:      note,
-	}
-	if err := h.db.Create(rep).Error; err != nil {
-		fail(c, 500, "保存失败")
-		return
-	}
-	c.JSON(201, rep)
+	c.JSON(200, gin.H{
+		"ok":           true,
+		"status":       status,
+		"amount":       amount,
+		"diff_bill":    diffAmount > 0,
+		"diff_amount":  diffAmount,
+		"month_expense": model.Round2(expenseTotal + diffAmount),
+	})
 }
 
 // UnmarkRepayment 取消某账户某月的还款标记。
+// 同时移除该月由标记还款产生的补差账单，避免数据残留。
 func (h *Handler) UnmarkRepayment(c *gin.Context) {
 	cu := currentUser(c)
 	month := strings.TrimSpace(c.Query("month"))
@@ -153,5 +240,20 @@ func (h *Handler) UnmarkRepayment(c *gin.Context) {
 		fail(c, 500, "取消失败")
 		return
 	}
+	// 清理该月补差账单
+	start, end, _ := monthRange(month)
+	h.db.Where("user_id = ? AND account_id = ? AND type = ? AND note = ? AND occurred_at >= ? AND occurred_at < ?",
+		cu.ID, accountID, model.TypeExpense, diffBillNote, start, end).
+		Delete(&model.Bill{})
 	c.JSON(200, gin.H{"ok": true})
+}
+
+// otherCategory 获取用户支出类型下的「其他」固定分类。
+func (h *Handler) otherCategory(userID uint) (*model.Category, error) {
+	var cat model.Category
+	if err := h.db.Where("user_id = ? AND type = ? AND name = ?", userID, model.TypeExpense, fixedCategoryName).
+		First(&cat).Error; err != nil {
+		return nil, err
+	}
+	return &cat, nil
 }

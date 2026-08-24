@@ -48,13 +48,14 @@
           <div class="acc-due">每月 {{ item.account.repay_day }} 日前还款 · 本月支出 ¥{{ formatMoney(item.month_expense) }}</div>
         </div>
         <div class="acc-status">
-          <el-tag v-if="item.repaid" type="success" effect="light">已还款</el-tag>
+          <el-tag v-if="item.repaid && item.status === 'partial'" type="warning" effect="light">部分还款</el-tag>
+          <el-tag v-else-if="item.repaid" type="success" effect="light">已还款</el-tag>
           <el-tag v-else-if="item.overdue" type="danger" effect="light">逾期 {{ item.overdue_by }} 天</el-tag>
           <el-tag v-else-if="!item.has_expense" type="info" effect="plain">本月无支出</el-tag>
           <el-tag v-else type="info" effect="plain">待还款</el-tag>
         </div>
         <div class="acc-time" v-if="item.repaid">
-          <div class="repaid-at">{{ fmtTime(item.repaid_at) }}</div>
+          <div class="repaid-at">{{ fmtTime(item.repaid_at) }}<span v-if="item.amount"> · ¥{{ formatMoney(item.amount) }}</span></div>
           <div class="repaid-note" v-if="item.note">{{ item.note }}</div>
         </div>
         <div class="acc-ops">
@@ -67,11 +68,18 @@
     </div>
 
     <!-- 标记还款对话框 -->
-    <el-dialog v-model="markVisible" title="标记已还款" width="420px">
+    <el-dialog v-model="markVisible" title="标记已还款" width="440px">
       <div v-if="current" class="mark-desc">
         确认「{{ current.account.name }}」已完成 <b>{{ monthLabel }}</b> 还款？
       </div>
-      <el-input v-model="markForm.note" placeholder="备注（可选），如 还款金额 / 渠道" maxlength="255" clearable />
+      <div class="mark-amount">
+        <span class="mark-label">实际还款金额</span>
+        <el-input-number v-model="markForm.amount" :min="0" :precision="2" :step="10" controls-position="right" style="width: 180px" />
+      </div>
+      <div class="mark-tip">
+        本月账单合计 ¥{{ current ? formatMoney(current.month_expense) : '0.00' }}。实际还款大于合计将自动补录差额账单；小于合计则标记为部分还款。
+      </div>
+      <el-input v-model="markForm.note" placeholder="备注（可选），如 还款渠道" maxlength="255" clearable class="mark-note" />
       <template #footer>
         <el-button @click="markVisible = false">取消</el-button>
         <el-button type="primary" :loading="marking" @click="doMark">确认已还款</el-button>
@@ -93,7 +101,7 @@ const loading = ref(false)
 const markVisible = ref(false)
 const marking = ref(false)
 const current = ref(null)
-const markForm = reactive({ note: '' })
+const markForm = reactive({ amount: 0, note: '' })
 
 const monthLabel = computed(() => {
   const [y, m] = month.value.split('-')
@@ -128,19 +136,31 @@ async function load() {
 
 function openMark(item) {
   current.value = item
+  markForm.amount = item.month_expense || 0
   markForm.note = ''
   markVisible.value = true
 }
 
 async function doMark() {
+  if (markForm.amount == null || markForm.amount < 0) {
+    ElMessage.warning('请输入实际还款金额')
+    return
+  }
   marking.value = true
   try {
-    await repaymentApi.mark({
+    const res = await repaymentApi.mark({
       account_id: current.value.account.id,
       month: month.value,
+      amount: markForm.amount,
       note: markForm.note.trim(),
     })
-    ElMessage.success('已标记还款')
+    if (res && res.diff_bill) {
+      ElMessage.success(`已标记还款，并自动补录差额账单 ¥${formatMoney(res.diff_amount || 0)}`)
+    } else if (res && res.status === 'partial') {
+      ElMessage.info('已标记为部分还款，该账户本月尚未还清')
+    } else {
+      ElMessage.success('已标记还款')
+    }
     markVisible.value = false
     load()
   } catch (e) {
@@ -292,5 +312,24 @@ onMounted(load)
   margin-bottom: 14px;
   font-size: 14px;
   color: #606266;
+}
+.mark-amount {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.mark-label {
+  font-size: 14px;
+  color: #606266;
+}
+.mark-tip {
+  font-size: 12px;
+  color: #c0c4cc;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+.mark-note {
+  margin-bottom: 0;
 }
 </style>
