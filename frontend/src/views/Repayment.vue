@@ -44,7 +44,10 @@
       <div v-for="item in items" :key="item.account.id" class="repay-item" :class="{ overdue: item.overdue }">
         <div class="acc-icon"><el-icon :size="24"><component :is="item.account.icon || 'Wallet'" /></el-icon></div>
         <div class="acc-info">
-          <div class="acc-name">{{ item.account.name }}</div>
+          <div class="acc-name">
+            <span v-if="item.has_expense" class="acc-link" @click="showBills(item)">{{ item.account.name }}</span>
+            <template v-else>{{ item.account.name }}</template>
+          </div>
           <div class="acc-due">本期账单 {{ fmtBillingRange(item) }}</div>
           <div class="acc-due">应还 ¥{{ formatMoney(item.month_expense) }} · 每月 {{ item.account.repay_day }} 日前还款</div>
         </div>
@@ -86,6 +89,38 @@
         <el-button type="primary" :loading="marking" @click="doMark">确认已还款</el-button>
       </template>
     </el-dialog>
+
+    <!-- 账期账单明细 -->
+    <el-dialog v-model="detailVisible" :title="`${detailAccName} · 本期账单明细`" width="660px" top="6vh">
+      <div v-loading="detailLoading">
+        <template v-if="detailData">
+          <div class="billing-summary">
+            账单周期：{{ shortDate(detailData.billing_start) }} ~ {{ shortDate(detailData.billing_end) }}
+            <span class="b-sum-exp">支出 ¥{{ formatMoney(detailData.expense_total) }}</span>
+            <span class="b-sum-inc">收入 ¥{{ formatMoney(detailData.income_total) }}</span>
+          </div>
+          <el-table :data="detailData.items" size="small" style="width: 100%">
+            <el-table-column label="日期" width="120">
+              <template #default="{ row }">{{ (row.occurred_at || '').slice(0, 10) }}</template>
+            </el-table-column>
+            <el-table-column label="分类" width="130">
+              <template #default="{ row }">{{ row.category ? row.category.name : '-' }}</template>
+            </el-table-column>
+            <el-table-column label="金额">
+              <template #default="{ row }">
+                <span :class="row.type === 'income' ? 'money-income' : 'money-expense'">
+                  {{ row.type === 'income' ? '+' : '-' }}¥{{ formatMoney(row.amount) }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="备注" min-width="130">
+              <template #default="{ row }">{{ row.note }}</template>
+            </el-table-column>
+          </el-table>
+          <el-empty v-if="!detailData.items.length" description="该账期暂无账单" :image-size="50" />
+        </template>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -103,6 +138,11 @@ const markVisible = ref(false)
 const marking = ref(false)
 const current = ref(null)
 const markForm = reactive({ amount: 0, note: '' })
+
+const detailVisible = ref(false)
+const detailLoading = ref(false)
+const detailData = ref(null)
+const detailAccName = ref('')
 
 const monthLabel = computed(() => {
   const [y, m] = month.value.split('-')
@@ -144,6 +184,20 @@ async function load() {
     items.value = []
   } finally {
     loading.value = false
+  }
+}
+
+async function showBills(item) {
+  detailAccName.value = item.account.name
+  detailVisible.value = true
+  detailLoading.value = true
+  detailData.value = null
+  try {
+    detailData.value = await repaymentApi.bills(month.value, item.account.id)
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    detailLoading.value = false
   }
 }
 
@@ -290,6 +344,15 @@ onMounted(load)
   font-size: 15px;
   font-weight: 600;
 }
+.acc-link {
+  color: #409eff;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.acc-link:hover {
+  color: #66b1ff;
+}
 .acc-due {
   font-size: 12px;
   color: #909399;
@@ -320,6 +383,27 @@ onMounted(load)
 .no-op {
   font-size: 12px;
   color: #c0c4cc;
+}
+.billing-summary {
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 10px;
+}
+.b-sum-exp {
+  color: #f56c6c;
+  margin-left: 12px;
+  font-weight: 600;
+}
+.b-sum-inc {
+  color: #67c23a;
+  margin-left: 12px;
+  font-weight: 600;
+}
+.money-expense {
+  color: #f56c6c;
+}
+.money-income {
+  color: #67c23a;
 }
 .mark-desc {
   margin-bottom: 14px;

@@ -67,6 +67,7 @@ export const accountApi = {
 // ===== 还款 =====
 export const repaymentApi = {
   list: (month) => api.get('/repayments', { params: { month } }),
+  bills: (month, accountId) => api.get('/repayments/bills', { params: { month, account_id: accountId } }),
   mark: (data) => api.post('/repayments', data),
   unmark: (month, accountId) => api.delete('/repayments', { params: { month, account_id: accountId } }),
 }

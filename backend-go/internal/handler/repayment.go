@@ -274,6 +274,52 @@ func (h *Handler) UnmarkRepayment(c *gin.Context) {
 	c.JSON(200, gin.H{"ok": true})
 }
 
+// ListRepaymentBills 某账户在指定月份账期内的账单明细（用于还款页查看账期应还组成）。
+func (h *Handler) ListRepaymentBills(c *gin.Context) {
+	cu := currentUser(c)
+	month := strings.TrimSpace(c.Query("month"))
+	accountID := strings.TrimSpace(c.Query("account_id"))
+	if month == "" || accountID == "" {
+		badRequest(c, "参数缺失")
+		return
+	}
+	if _, _, ok := monthRange(month); !ok {
+		badRequest(c, "月份格式不正确")
+		return
+	}
+	var acc model.Account
+	if err := h.db.Where("id = ? AND user_id = ? AND is_credit = ?", accountID, cu.ID, true).
+		First(&acc).Error; err != nil {
+		badRequest(c, "账户不存在或非信用账户")
+		return
+	}
+	start, end, ok := billingRange(month, acc.StatementDay, acc.RepayDay)
+	if !ok {
+		badRequest(c, "月份格式不正确")
+		return
+	}
+	var bills []model.Bill
+	h.db.Preload("Category").Preload("Account").Preload("Tags").
+		Where("user_id = ? AND account_id = ? AND occurred_at >= ? AND occurred_at < ?",
+			cu.ID, acc.ID, start, end).
+		Order("occurred_at asc, id asc").Find(&bills)
+	var expense, income float64
+	for _, b := range bills {
+		if b.Type == model.TypeExpense {
+			expense += b.Amount
+		} else {
+			income += b.Amount
+		}
+	}
+	c.JSON(200, gin.H{
+		"billing_start": start.Format("2006-01-02"),
+		"billing_end":   end.Format("2006-01-02"),
+		"expense_total": model.Round2(expense),
+		"income_total":  model.Round2(income),
+		"items":         bills,
+	})
+}
+
 // otherCategory 获取用户支出类型下的「其他」固定分类。
 func (h *Handler) otherCategory(userID uint) (*model.Category, error) {
 	var cat model.Category

@@ -55,6 +55,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 	// 还款
 	user.GET("/repayments", h.ListRepayments)
+	user.GET("/repayments/bills", h.ListRepaymentBills)
 	user.POST("/repayments", h.MarkRepayment)
 	user.DELETE("/repayments", h.UnmarkRepayment)
 
