@@ -111,6 +111,13 @@ export const recurringBillApi = {
   apply: (data) => api.post('/recurring-bills/apply', data),
 }
 
+// ===== 月度报告 =====
+export const reportsApi = {
+  list: () => api.get('/reports'),
+  generate: (data) => api.post('/reports/generate', data),
+  detail: (id) => api.get(`/reports/${id}`),
+}
+
 // ===== 统计 =====
 export const statsApi = {
   overview: (month) => api.get('/stats/overview', { params: { month } }),

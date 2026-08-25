@@ -17,11 +17,12 @@
         <el-menu-item index="/dashboard"><el-icon><HomeFilled /></el-icon><span>首页</span></el-menu-item>
         <el-menu-item index="/record"><el-icon><CirclePlusFilled /></el-icon><span>记一笔</span></el-menu-item>
         <el-menu-item index="/batch-record"><el-icon><EditPen /></el-icon><span>批量记账</span></el-menu-item>
-        <el-menu-item index="/recurring-bills"><el-icon><Calendar /></el-icon><span>固定账单</span></el-menu-item>
-        <el-menu-item index="/bills"><el-icon><Tickets /></el-icon><span>账单</span></el-menu-item>
-        <el-menu-item index="/repayment"><el-icon><CreditCard /></el-icon><span>还款</span></el-menu-item>
-        <el-menu-item index="/stats"><el-icon><DataAnalysis /></el-icon><span>统计</span></el-menu-item>
-        <el-menu-item index="/budget"><el-icon><Odometer /></el-icon><span>预算</span></el-menu-item>
+        <el-menu-item index="/recurring-bills"><el-icon><Calendar /></el-icon><span>固单记账</span></el-menu-item>
+        <el-menu-item index="/bills"><el-icon><Tickets /></el-icon><span>账单查询</span></el-menu-item>
+        <el-menu-item index="/repayment"><el-icon><CreditCard /></el-icon><span>账户还款</span></el-menu-item>
+        <el-menu-item index="/stats"><el-icon><DataAnalysis /></el-icon><span>统计分析</span></el-menu-item>
+        <el-menu-item index="/reports"><el-icon><Document /></el-icon><span>月度报告</span></el-menu-item>
+        <el-menu-item index="/budget"><el-icon><Odometer /></el-icon><span>预算管理</span></el-menu-item>
         <el-menu-item index="/categories"><el-icon><Grid /></el-icon><span>分类管理</span></el-menu-item>
         <el-menu-item index="/accounts"><el-icon><Wallet /></el-icon><span>账户管理</span></el-menu-item>
         <el-menu-item index="/settings"><el-icon><Setting /></el-icon><span>设置</span></el-menu-item>

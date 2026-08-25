@@ -65,6 +65,11 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	user.DELETE("/recurring-bills/:id", h.DeleteRecurringBill)
 	user.POST("/recurring-bills/apply", h.ApplyRecurringBills)
 
+	// 月度报告
+	user.GET("/reports", h.ListReports)
+	user.POST("/reports/generate", h.GenerateReport)
+	user.GET("/reports/:id", h.GetReport)
+
 	// 标签
 	user.GET("/tags", h.ListTags)
 	user.POST("/tags", h.CreateTag)
