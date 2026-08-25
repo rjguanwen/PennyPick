@@ -50,6 +50,7 @@ func Migrate(db *gorm.DB) error {
 		&model.Budget{},
 		&model.CategoryBudget{},
 		&model.Repayment{},
+		&model.RecurringBill{},
 	); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
 	}

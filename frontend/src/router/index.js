@@ -14,6 +14,8 @@ const routes = [
     children: [
       { path: 'dashboard', name: 'dashboard', component: () => import('../views/Dashboard.vue'), meta: { title: '首页' } },
       { path: 'record', name: 'record', component: () => import('../views/Record.vue'), meta: { title: '记一笔' } },
+      { path: 'batch-record', name: 'batch-record', component: () => import('../views/BatchRecord.vue'), meta: { title: '批量记账' } },
+      { path: 'recurring-bills', name: 'recurring-bills', component: () => import('../views/RecurringBill.vue'), meta: { title: '固定账单' } },
       { path: 'bills', name: 'bills', component: () => import('../views/BillList.vue'), meta: { title: '账单' } },
       { path: 'repayment', name: 'repayment', component: () => import('../views/Repayment.vue'), meta: { title: '还款' } },
       { path: 'stats', name: 'stats', component: () => import('../views/Stats.vue'), meta: { title: '统计' } },

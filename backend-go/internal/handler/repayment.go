@@ -30,8 +30,10 @@ type RepaymentItem struct {
 }
 
 // billingRange 返回查看月份 month（YYYY-MM）对应的账期 [start, end)。
-// 账期 = 上月出账日 ~ 本月出账日；statementDay 未设置（<=0 或非法）时按自然月。
-func billingRange(month string, statementDay int) (time.Time, time.Time, bool) {
+// 规则：本月还款对应的是「本月出账日」生成的账单（账期 = 上月出账日 ~ 本月出账日）；
+// 但当还款日早于出账日（还款日前本期账单尚未出账）时，本月还的是上月出账的账单，账期整体前移一个月。
+// statementDay 未设置（<=0 或非法）时按自然月。
+func billingRange(month string, statementDay, repayDay int) (time.Time, time.Time, bool) {
 	t, err := time.ParseInLocation("2006-01", month, time.Local)
 	if err != nil {
 		return time.Time{}, time.Time{}, false
@@ -39,6 +41,10 @@ func billingRange(month string, statementDay int) (time.Time, time.Time, bool) {
 	first := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.Local)
 	if statementDay < 1 || statementDay > 28 {
 		return first, first.AddDate(0, 1, 0), true // 自然月账期
+	}
+	if repayDay > 0 && repayDay < statementDay {
+		// 还款日在出账日前：本期账单未出，本月还上期账单
+		first = first.AddDate(0, -1, 0)
 	}
 	prevFirst := first.AddDate(0, -1, 0)
 	start := time.Date(prevFirst.Year(), prevFirst.Month(), statementDay, 0, 0, 0, 0, time.Local)
@@ -62,7 +68,7 @@ func (h *Handler) ListRepayments(c *gin.Context) {
 	expenseMap := map[uint]float64{}
 	if len(accounts) > 0 {
 		for _, a := range accounts {
-			start, end, ok := billingRange(month, a.StatementDay)
+			start, end, ok := billingRange(month, a.StatementDay, a.RepayDay)
 			if !ok {
 				continue
 			}
@@ -85,7 +91,7 @@ func (h *Handler) ListRepayments(c *gin.Context) {
 	todayMonth := today.Format("2006-01")
 	items := make([]RepaymentItem, 0, len(accounts))
 	for _, acc := range accounts {
-		bStart, bEnd, _ := billingRange(month, acc.StatementDay)
+		bStart, bEnd, _ := billingRange(month, acc.StatementDay, acc.RepayDay)
 		expense := model.Round2(expenseMap[acc.ID])
 		item := RepaymentItem{
 			Account:      &acc,
@@ -143,7 +149,7 @@ func (h *Handler) MarkRepayment(c *gin.Context) {
 		return
 	}
 
-	start, end, ok := billingRange(req.Month, acc.StatementDay)
+	start, end, ok := billingRange(req.Month, acc.StatementDay, acc.RepayDay)
 	if !ok {
 		badRequest(c, "月份格式不正确")
 		return
@@ -259,7 +265,7 @@ func (h *Handler) UnmarkRepayment(c *gin.Context) {
 		return
 	}
 	// 清理该账期补差账单
-	start, end, ok := billingRange(month, acc.StatementDay)
+	start, end, ok := billingRange(month, acc.StatementDay, acc.RepayDay)
 	if ok {
 		h.db.Where("user_id = ? AND account_id = ? AND type = ? AND note = ? AND occurred_at >= ? AND occurred_at < ?",
 			cu.ID, accountID, model.TypeExpense, diffBillNote, start, end).

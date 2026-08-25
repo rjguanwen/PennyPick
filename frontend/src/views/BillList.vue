@@ -26,6 +26,9 @@
       <el-select v-model="filters.category_id" placeholder="分类" clearable size="small" class="filter-cat" @change="resetAndLoad">
         <el-option v-for="c in allCategories" :key="c.id" :label="c.name" :value="c.id" />
       </el-select>
+      <el-select v-model="filters.account_id" placeholder="账户" clearable size="small" class="filter-acc" @change="resetAndLoad">
+        <el-option v-for="a in accounts" :key="a.id" :label="a.name" :value="a.id" />
+      </el-select>
       <el-select v-model="filters.tag_id" placeholder="标签" clearable size="small" class="filter-tag" @change="resetAndLoad">
         <el-option v-for="t in allTags" :key="t.id" :label="t.name" :value="t.id" />
       </el-select>
@@ -86,7 +89,7 @@ import BillFormDialog from '../components/BillFormDialog.vue'
 const router = useRouter()
 
 const month = ref(currentMonth())
-const filters = reactive({ type: '', category_id: null, tag_id: null, keyword: '' })
+const filters = reactive({ type: '', category_id: null, account_id: null, tag_id: null, keyword: '' })
 
 const bills = ref([])
 const allCategories = ref([])
@@ -131,6 +134,7 @@ function buildParams(pageNum) {
     month: month.value,
     type: filters.type || undefined,
     category_id: filters.category_id || undefined,
+    account_id: filters.account_id || undefined,
     tag_id: filters.tag_id || undefined,
     keyword: filters.keyword || undefined,
     page: pageNum,
@@ -243,6 +247,9 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 .filter-cat {
+  width: 110px;
+}
+.filter-acc {
   width: 110px;
 }
 .filter-tag {

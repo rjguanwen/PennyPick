@@ -112,7 +112,7 @@ const router = useRouter()
 const maxBillTags = 8
 const amount = ref('')
 const saving = ref(false)
-const continueMode = ref(false)
+const continueMode = ref(true) // 保存后继续记：默认启用
 const form = reactive({
   type: 'expense',
   category_id: null,

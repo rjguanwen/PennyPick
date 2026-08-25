@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"pennypickbackend/internal/model"
 )
@@ -52,9 +54,9 @@ func (r *billReq) occurredAt(defaultNow bool) time.Time {
 }
 
 // checkCategory 校验分类归属与类型匹配。
-func (h *Handler) checkCategory(cuID, catID uint, typ string) bool {
+func (h *Handler) checkCategory(db *gorm.DB, cuID, catID uint, typ string) bool {
 	var count int64
-	h.db.Model(&model.Category{}).
+	db.Model(&model.Category{}).
 		Where("id = ? AND user_id = ? AND type = ?", catID, cuID, typ).Count(&count)
 	return count > 0
 }
@@ -140,7 +142,7 @@ func (h *Handler) CreateBill(c *gin.Context) {
 		badRequest(c, msg)
 		return
 	}
-	if !h.checkCategory(cu.ID, req.CategoryID, req.Type) {
+	if !h.checkCategory(h.db, cu.ID, req.CategoryID, req.Type) {
 		badRequest(c, "分类不存在或与账单类型不匹配")
 		return
 	}
@@ -166,7 +168,7 @@ func (h *Handler) CreateBill(c *gin.Context) {
 		fail(c, 500, "保存失败")
 		return
 	}
-	if err := h.setBillTags(bill.ID, cu.ID, req.TagIDs); err != nil {
+	if err := h.setBillTags(h.db, bill.ID, cu.ID, req.TagIDs); err != nil {
 		h.db.Delete(bill)
 		fail(c, 400, err.Error())
 		return
@@ -197,7 +199,7 @@ func (h *Handler) UpdateBill(c *gin.Context) {
 		badRequest(c, msg)
 		return
 	}
-	if !h.checkCategory(cu.ID, req.CategoryID, req.Type) {
+	if !h.checkCategory(h.db, cu.ID, req.CategoryID, req.Type) {
 		badRequest(c, "分类不存在或与账单类型不匹配")
 		return
 	}
@@ -222,7 +224,7 @@ func (h *Handler) UpdateBill(c *gin.Context) {
 		fail(c, 500, "保存失败")
 		return
 	}
-	if err := h.setBillTags(bill.ID, cu.ID, req.TagIDs); err != nil {
+	if err := h.setBillTags(h.db, bill.ID, cu.ID, req.TagIDs); err != nil {
 		fail(c, 400, err.Error())
 		return
 	}
@@ -251,30 +253,93 @@ func (h *Handler) DeleteBill(c *gin.Context) {
 }
 
 // setBillTags 校验并替换账单标签（上限、归属校验）。
-func (h *Handler) setBillTags(billID, userID uint, tagIDs []uint) error {
+func (h *Handler) setBillTags(db *gorm.DB, billID, userID uint, tagIDs []uint) error {
 	tagIDs = dedupeTags(tagIDs)
 	if len(tagIDs) > model.MaxBillTags {
 		return fmt.Errorf("每笔账单最多添加 %d 个标签", model.MaxBillTags)
 	}
-	if err := h.db.Exec("DELETE FROM bill_tags WHERE bill_id = ?", billID).Error; err != nil {
+	if err := db.Exec("DELETE FROM bill_tags WHERE bill_id = ?", billID).Error; err != nil {
 		return err
 	}
 	if len(tagIDs) == 0 {
 		return nil
 	}
 	var tags []model.Tag
-	if err := h.db.Where("id IN ? AND user_id = ?", tagIDs, userID).Find(&tags).Error; err != nil {
+	if err := db.Where("id IN ? AND user_id = ?", tagIDs, userID).Find(&tags).Error; err != nil {
 		return err
 	}
 	if len(tags) != len(tagIDs) {
 		return fmt.Errorf("部分标签不存在或无权使用")
 	}
 	for _, t := range tags {
-		if err := h.db.Exec("INSERT INTO bill_tags (bill_id, tag_id) VALUES (?, ?)", billID, t.ID).Error; err != nil {
+		if err := db.Exec("INSERT INTO bill_tags (bill_id, tag_id) VALUES (?, ?)", billID, t.ID).Error; err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// BatchCreateBills 批量记多笔账单（同一账户，事务整体提交，任一笔失败则全部回滚）。
+func (h *Handler) BatchCreateBills(c *gin.Context) {
+	cu := currentUser(c)
+	var req struct {
+		AccountID uint      `json:"account_id"`
+		Items     []billReq `json:"items"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		badRequest(c, "请求参数有误")
+		return
+	}
+	if len(req.Items) == 0 {
+		badRequest(c, "请至少录入一笔账单")
+		return
+	}
+	if len(req.Items) > 200 {
+		badRequest(c, "单次最多录入 200 笔")
+		return
+	}
+	var acc model.Account
+	if err := h.db.Where("id = ? AND user_id = ?", req.AccountID, cu.ID).First(&acc).Error; err != nil {
+		badRequest(c, "账户不存在")
+		return
+	}
+	created := make([]model.Bill, 0, len(req.Items))
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		for i := range req.Items {
+			it := &req.Items[i]
+			if it.AccountID != nil && *it.AccountID != req.AccountID {
+				return fmt.Errorf("第 %d 笔：账户与所选账户不一致", i+1)
+			}
+			if ok, msg := it.validate(); !ok {
+				return errors.New("第 " + strconv.Itoa(i+1) + " 笔：" + msg)
+			}
+			if !h.checkCategory(tx, cu.ID, it.CategoryID, it.Type) {
+				return fmt.Errorf("第 %d 笔：分类不存在或与账单类型不匹配", i+1)
+			}
+			bill := &model.Bill{
+				UserID:     cu.ID,
+				CategoryID: it.CategoryID,
+				AccountID:  &req.AccountID,
+				Type:       it.Type,
+				Amount:     model.Round2(it.Amount),
+				Note:       strings.TrimSpace(it.Note),
+				OccurredAt: model.DateTime{Time: it.occurredAt(true)},
+			}
+			if err := tx.Create(bill).Error; err != nil {
+				return err
+			}
+			if err := h.setBillTags(tx, bill.ID, cu.ID, it.TagIDs); err != nil {
+				return err
+			}
+			created = append(created, *bill)
+		}
+		return nil
+	})
+	if err != nil {
+		fail(c, 400, err.Error())
+		return
+	}
+	c.JSON(201, gin.H{"count": len(created), "items": created})
 }
 
 // dedupeTags 去重并保持顺序。

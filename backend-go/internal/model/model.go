@@ -110,6 +110,8 @@ type Bill struct {
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 
+	RecurringBillID *uint `gorm:"index" json:"recurring_bill_id"` // 来源固定账单（由固定账单记入时标记，用于防重复）
+
 	Category *Category `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
 	Account  *Account  `gorm:"foreignKey:AccountID" json:"account,omitempty"`
 	Tags     []Tag     `gorm:"many2many:bill_tags;" json:"tags,omitempty"`
@@ -138,6 +140,21 @@ type CategoryBudget struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 
 	Category *Category `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
+}
+
+// RecurringBill 月度固定账单模板（每月固定支出/收入，如房贷、车贷）。
+type RecurringBill struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	UserID     uint      `gorm:"index;not null" json:"user_id"`
+	Name       string    `gorm:"size:64;not null" json:"name"`
+	Type       string    `gorm:"size:8;not null" json:"type"` // expense / income
+	CategoryID uint      `gorm:"index;not null" json:"category_id"`
+	AccountID  *uint     `gorm:"index" json:"account_id"`
+	Amount     float64   `gorm:"not null" json:"amount"`
+	Day        int       `gorm:"default:1" json:"day"`      // 每月几号（1-28，记账时使用）
+	Note       string    `gorm:"size:255" json:"note"`
+	Active     bool      `gorm:"default:true" json:"active"` // 是否启用
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // CategoryPreset 预置分类定义。

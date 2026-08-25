@@ -83,6 +83,7 @@ export const tagApi = {
 export const billApi = {
   list: (params) => api.get('/bills', { params }),
   create: (data) => api.post('/bills', data),
+  createBatch: (data) => api.post('/bills/batch', data),
   update: (id, data) => api.patch(`/bills/${id}`, data),
   remove: (id) => api.delete(`/bills/${id}`),
 }
@@ -99,6 +100,15 @@ export const budgetApi = {
   upsertCategory: (data) => api.put('/budgets/category', data),
   removeCategory: (month, categoryId) =>
     api.delete('/budgets/category', { params: { month, category_id: categoryId } }),
+}
+
+// ===== 固定账单 =====
+export const recurringBillApi = {
+  list: () => api.get('/recurring-bills'),
+  create: (data) => api.post('/recurring-bills', data),
+  update: (id, data) => api.patch(`/recurring-bills/${id}`, data),
+  remove: (id) => api.delete(`/recurring-bills/${id}`),
+  apply: (data) => api.post('/recurring-bills/apply', data),
 }
 
 // ===== 统计 =====
