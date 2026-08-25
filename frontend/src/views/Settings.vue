@@ -77,13 +77,28 @@
         <el-button type="primary" :icon="Lock" :loading="pwdSaving" @click="changePassword">保存密码</el-button>
       </el-form>
     </div>
+
+    <!-- 关于 -->
+    <div class="pp-card">
+      <div class="card-title"><el-icon><InfoFilled /></el-icon> 关于</div>
+      <div class="about">
+        <div class="about-logo">💰</div>
+        <div class="about-name">拾财 PennyPick</div>
+        <div class="about-desc">个人记账应用：轻松记下每一笔消费，多维度统计分析，科学规划预算，帮你管好每一分钱。</div>
+        <div class="about-item"><span>版本</span><b>1.0.0</b></div>
+        <div class="about-item"><span>开发者</span><b>关文</b></div>
+        <div class="about-item"><span>邮箱</span><b>rjguanwen001@163.com</b></div>
+        <div class="about-item"><span>发布时间</span><b>2026-08-25</b></div>
+        <div class="about-item"><span>技术栈</span><b>Vue 3 · Element Plus · Go · SQLite</b></div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CollectionTag, Download, Plus, Lock } from '@element-plus/icons-vue'
+import { CollectionTag, Download, Plus, Lock, InfoFilled } from '@element-plus/icons-vue'
 import { authApi, exportApi, tagApi } from '../api'
 import { useAuthStore } from '../stores/auth'
 import { nowDate } from '../utils/format'
@@ -264,5 +279,45 @@ onMounted(async () => {
   font-size: 12px;
   color: #c0c4cc;
   margin-top: 8px;
+}
+.about {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.about-logo {
+  font-size: 44px;
+  margin-bottom: 6px;
+}
+.about-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #303133;
+}
+.about-desc {
+  font-size: 13px;
+  color: #909399;
+  line-height: 1.7;
+  margin: 8px 0 14px;
+  max-width: 420px;
+}
+.about-item {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 340px;
+  padding: 6px 0;
+  font-size: 14px;
+  border-bottom: 1px solid #f5f7fa;
+}
+.about-item:last-child {
+  border-bottom: none;
+}
+.about-item span {
+  color: #909399;
+}
+.about-item b {
+  color: #303133;
 }
 </style>
