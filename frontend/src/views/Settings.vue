@@ -89,7 +89,7 @@
         <div class="about-item"><span>开发者</span><b>关文</b></div>
         <div class="about-item"><span>邮箱</span><b>rjguanwen001@163.com</b></div>
         <div class="about-item"><span>发布时间</span><b>2026-08-25</b></div>
-        <div class="about-item"><span>技术栈</span><b>Vue 3 · Element Plus · Go · SQLite</b></div>
+        <div class="about-item"><span>技术栈</span><b>Vue 3 · Element Plus · Go</b></div>
       </div>
     </div>
   </div>
