@@ -134,3 +134,23 @@ export const exportApi = {
   download: (params) =>
     api.get('/export', { params, responseType: 'blob' }),
 }
+
+// ===== 账单导入 =====
+export const billImportApi = {
+  // 上传账单文件并解析（预览）
+  parse: (file, platform) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('platform', platform)
+    return api.post('/bill-import/parse', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    })
+  },
+  // 确认导入
+  confirm: (data) => api.post('/bill-import/confirm', data),
+  // 导入历史
+  history: (page = 1, pageSize = 10) => api.get('/bill-import/history', { params: { page, page_size: pageSize } }),
+  // 导入明细
+  detail: (id) => api.get(`/bill-import/${id}`),
+}

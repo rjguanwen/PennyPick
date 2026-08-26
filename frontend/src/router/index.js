@@ -16,6 +16,7 @@ const routes = [
       { path: 'record', name: 'record', component: () => import('../views/Record.vue'), meta: { title: '记一笔' } },
       { path: 'batch-record', name: 'batch-record', component: () => import('../views/BatchRecord.vue'), meta: { title: '批量记账' } },
       { path: 'recurring-bills', name: 'recurring-bills', component: () => import('../views/RecurringBill.vue'), meta: { title: '固单记账' } },
+      { path: 'bill-import', name: 'bill-import', component: () => import('../views/BillImport.vue'), meta: { title: '账单导入' } },
       { path: 'bills', name: 'bills', component: () => import('../views/BillList.vue'), meta: { title: '账单查询' } },
       { path: 'repayment', name: 'repayment', component: () => import('../views/Repayment.vue'), meta: { title: '账户还款' } },
       { path: 'stats', name: 'stats', component: () => import('../views/Stats.vue'), meta: { title: '统计分析' } },

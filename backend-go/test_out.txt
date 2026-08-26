@@ -1,0 +1,7 @@
+?   	pennypickbackend/cmd/server	[no test files]
+?   	pennypickbackend/internal/config	[no test files]
+?   	pennypickbackend/internal/database	[no test files]
+?   	pennypickbackend/internal/handler	[no test files]
+?   	pennypickbackend/internal/middleware	[no test files]
+?   	pennypickbackend/internal/model	[no test files]
+ok  	pennypickbackend/internal/service	1.014s

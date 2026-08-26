@@ -84,6 +84,12 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	user.PATCH("/bills/:id", h.UpdateBill)
 	user.DELETE("/bills/:id", h.DeleteBill)
 
+	// 账单导入
+	user.POST("/bill-import/parse", h.ParseBillImport)
+	user.POST("/bill-import/confirm", h.ConfirmBillImport)
+	user.GET("/bill-import/history", h.ListImportHistory)
+	user.GET("/bill-import/:id", h.GetImportDetail)
+
 	// 预算（总预算）
 	user.GET("/budgets", h.GetBudget)
 	user.GET("/budgets/all", h.ListBudgets)
