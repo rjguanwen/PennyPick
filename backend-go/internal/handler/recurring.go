@@ -20,6 +20,7 @@ type recurringReq struct {
 	Amount     float64 `json:"amount"`
 	Day        int     `json:"day"`
 	Note       string  `json:"note"`
+	TagIDs     []uint  `json:"tag_ids"`
 	Active     *bool   `json:"active"`
 }
 
@@ -92,6 +93,7 @@ func (h *Handler) CreateRecurringBill(c *gin.Context) {
 		Amount:     model.Round2(req.Amount),
 		Day:        req.Day,
 		Note:       strings.TrimSpace(req.Note),
+		TagIDs:     dedupeTags(req.TagIDs),
 		Active:     active,
 	}
 	if err := h.db.Create(rb).Error; err != nil {
@@ -142,6 +144,7 @@ func (h *Handler) UpdateRecurringBill(c *gin.Context) {
 	rb.Amount = model.Round2(req.Amount)
 	rb.Day = req.Day
 	rb.Note = strings.TrimSpace(req.Note)
+	rb.TagIDs = dedupeTags(req.TagIDs)
 	if req.Active != nil {
 		rb.Active = *req.Active
 	}
@@ -255,6 +258,9 @@ func (h *Handler) ApplyRecurringBills(c *gin.Context) {
 				RecurringBillID: &rb.ID,
 			}
 			if err := tx.Create(bill).Error; err != nil {
+				return err
+			}
+			if err := h.setBillTags(tx, bill.ID, cu.ID, rb.TagIDs); err != nil {
 				return err
 			}
 			created = append(created, *bill)

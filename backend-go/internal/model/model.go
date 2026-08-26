@@ -151,8 +151,9 @@ type RecurringBill struct {
 	CategoryID uint      `gorm:"index;not null" json:"category_id"`
 	AccountID  *uint     `gorm:"index" json:"account_id"`
 	Amount     float64   `gorm:"not null" json:"amount"`
-	Day        int       `gorm:"default:1" json:"day"`      // 每月几号（1-28，记账时使用）
+	Day        int       `gorm:"default:1" json:"day"`       // 每月几号（1-28，记账时使用）
 	Note       string    `gorm:"size:255" json:"note"`
+	TagIDs     []uint    `gorm:"serializer:json" json:"tag_ids"` // 标签 id 列表（记入账单时写入）
 	Active     bool      `gorm:"default:true" json:"active"` // 是否启用
 	CreatedAt  time.Time `json:"created_at"`
 }

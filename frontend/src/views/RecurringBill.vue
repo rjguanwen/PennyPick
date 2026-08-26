@@ -74,6 +74,23 @@
         <el-form-item label="备注">
           <el-input v-model="dlgForm.note" placeholder="备注（可选）" maxlength="255" />
         </el-form-item>
+        <el-form-item label="标签">
+          <el-select
+            v-model="dlgForm.tag_ids"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            :limit="maxBillTags"
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="标签（可选，可输入新标签）"
+            style="width: 100%"
+          >
+            <el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id" />
+          </el-select>
+          <span class="tip-inline">记入账单时自动带上这些标签</span>
+        </el-form-item>
         <el-form-item label="启用">
           <el-switch v-model="dlgForm.active" />
           <span class="tip-inline">停用的项默认不勾选</span>
@@ -91,20 +108,22 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import { accountApi, categoryApi, recurringBillApi } from '../api'
+import { accountApi, categoryApi, recurringBillApi, tagApi } from '../api'
 import { currentMonth, formatMoney } from '../utils/format'
 import CatIcon from '../components/CatIcon.vue'
 
+const maxBillTags = 8
 const list = ref([])
 const categories = ref([])
 const accounts = ref([])
+const tags = ref([])
 const month = ref(currentMonth())
 const selectedIds = ref([])
 const applying = ref(false)
 
 const dlgVisible = ref(false)
 const saving = ref(false)
-const dlgForm = reactive({ id: null, name: '', type: 'expense', category_id: null, amount: null, account_id: null, day: 1, note: '', active: true })
+const dlgForm = reactive({ id: null, name: '', type: 'expense', category_id: null, amount: null, account_id: null, day: 1, note: '', tag_ids: [], active: true })
 
 const visibleCategories = computed(() => categories.value.filter((c) => c.type === dlgForm.type))
 const monthLabel = computed(() => {
@@ -141,10 +160,11 @@ function toggle(id, v) {
 }
 
 async function load() {
-  const [rbs, cats, accs] = await Promise.all([recurringBillApi.list(), categoryApi.list(), accountApi.list()])
+  const [rbs, cats, accs, tgs] = await Promise.all([recurringBillApi.list(), categoryApi.list(), accountApi.list(), tagApi.list()])
   list.value = rbs || []
   categories.value = cats || []
   accounts.value = accs || []
+  tags.value = tgs || []
   selectedIds.value = list.value.filter((x) => x.active).map((x) => x.id)
 }
 
@@ -180,6 +200,7 @@ function openAdd() {
   dlgForm.account_id = null
   dlgForm.day = 1
   dlgForm.note = ''
+  dlgForm.tag_ids = []
   dlgForm.active = true
   dlgVisible.value = true
 }
@@ -193,11 +214,38 @@ function openEdit(rb) {
   dlgForm.account_id = rb.account_id || null
   dlgForm.day = rb.day || 1
   dlgForm.note = rb.note || ''
+  dlgForm.tag_ids = (rb.tag_ids || []).map((x) => Number(x))
   dlgForm.active = !!rb.active
   dlgVisible.value = true
 }
 
+// 把 tag_ids 中的字符串（新建标签名）转为真实标签 id
+async function resolveTagIds(ids) {
+  const newNames = []
+  for (const v of ids || []) {
+    if (typeof v === 'string') {
+      const n = v.trim()
+      if (n && !newNames.includes(n)) newNames.push(n)
+    }
+  }
+  const nameToId = {}
+  for (const n of newNames) {
+    const t = await tagApi.create({ name: n })
+    nameToId[n] = t.id
+  }
+  const out = []
+  for (const v of ids || []) {
+    if (typeof v === 'number') {
+      out.push(v)
+    } else if (typeof v === 'string' && nameToId[v.trim()]) {
+      out.push(nameToId[v.trim()])
+    }
+  }
+  return out
+}
+
 async function saveDlg() {
+  const tag_ids = await resolveTagIds(dlgForm.tag_ids)
   const payload = {
     name: dlgForm.name.trim(),
     type: dlgForm.type,
@@ -206,6 +254,7 @@ async function saveDlg() {
     amount: dlgForm.amount,
     day: dlgForm.day,
     note: dlgForm.note,
+    tag_ids,
     active: dlgForm.active,
   }
   if (!payload.name) {

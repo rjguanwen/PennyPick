@@ -99,10 +99,11 @@ const canSave = computed(() => account_id.value && validCount.value > 0)
 
 function addRow() {
   const first = visibleCategories.value[0]
+  const last = rows.value[rows.value.length - 1]
   rows.value.push({
     category_id: first ? first.id : null,
     amount: null,
-    occurred_at: nowDate(),
+    occurred_at: last ? last.occurred_at : nowDate(), // 非首行继承上一行日期
     note: '',
     tag_ids: [],
   })
