@@ -106,16 +106,17 @@ func (h *Handler) monthTotal(userID uint, month string) (expense, income float64
 		return 0, 0, 0
 	}
 	var rows []struct {
-		Type   string
-		Amount float64
+		Type         string
+		Amount       float64
+		RefundAmount float64
 	}
 	h.db.Model(&model.Bill{}).
-		Select("type, amount").
+		Select("type, amount, refund_amount").
 		Where("user_id = ? AND occurred_at >= ? AND occurred_at < ?", userID, start, end).
 		Scan(&rows)
 	for _, r := range rows {
 		if r.Type == model.TypeExpense {
-			expense += r.Amount
+			expense += r.Amount - r.RefundAmount // 支出按净额（扣减退款）
 		} else if r.Type == model.TypeIncome {
 			income += r.Amount
 		}
@@ -170,28 +171,30 @@ func (h *Handler) buildReportData(userID uint, month string) *ReportData {
 	}
 	curCat := map[uint]float64{}
 	var billRows []struct {
-		CategoryID uint
-		Amount     float64
+		CategoryID   uint
+		Amount       float64
+		RefundAmount float64
 	}
 	h.db.Model(&model.Bill{}).
-		Select("category_id, amount").
+		Select("category_id, amount, refund_amount").
 		Where("user_id = ? AND type = ? AND occurred_at >= ? AND occurred_at < ?", userID, model.TypeExpense, start, end).
 		Scan(&billRows)
 	for _, r := range billRows {
-		curCat[r.CategoryID] += r.Amount
+		curCat[r.CategoryID] += r.Amount - r.RefundAmount
 	}
 	prevStart, prevEnd, _ := monthRange(shiftMonthStr(month, -1))
 	prevCat := map[uint]float64{}
 	var prevRows []struct {
-		CategoryID uint
-		Amount     float64
+		CategoryID   uint
+		Amount       float64
+		RefundAmount float64
 	}
 	h.db.Model(&model.Bill{}).
-		Select("category_id, amount").
+		Select("category_id, amount, refund_amount").
 		Where("user_id = ? AND type = ? AND occurred_at >= ? AND occurred_at < ?", userID, model.TypeExpense, prevStart, prevEnd).
 		Scan(&prevRows)
 	for _, r := range prevRows {
-		prevCat[r.CategoryID] += r.Amount
+		prevCat[r.CategoryID] += r.Amount - r.RefundAmount
 	}
 	data.Categories = make([]ReportCategory, 0, len(curCat))
 	for cid, total := range curCat {
@@ -229,12 +232,13 @@ func (h *Handler) buildReportData(userID uint, month string) *ReportData {
 	accExp := map[uint]float64{}
 	accInc := map[uint]float64{}
 	var accRows []struct {
-		AccountID *uint
-		Type      string
-		Amount    float64
+		AccountID    *uint
+		Type         string
+		Amount       float64
+		RefundAmount float64
 	}
 	h.db.Model(&model.Bill{}).
-		Select("account_id, type, amount").
+		Select("account_id, type, amount, refund_amount").
 		Where("user_id = ? AND occurred_at >= ? AND occurred_at < ?", userID, start, end).
 		Scan(&accRows)
 	for _, r := range accRows {
@@ -242,7 +246,7 @@ func (h *Handler) buildReportData(userID uint, month string) *ReportData {
 			continue
 		}
 		if r.Type == model.TypeExpense {
-			accExp[*r.AccountID] += r.Amount
+			accExp[*r.AccountID] += r.Amount - r.RefundAmount
 		} else {
 			accInc[*r.AccountID] += r.Amount
 		}
@@ -276,7 +280,7 @@ func (h *Handler) buildReportData(userID uint, month string) *ReportData {
 				item = &ReportTag{TagID: t.ID, Name: t.Name}
 				tagAgg[t.ID] = item
 			}
-			item.Total += b.Amount
+			item.Total += b.NetAmount() // 标签支出按净额（扣减退款）
 			item.Count++
 		}
 	}

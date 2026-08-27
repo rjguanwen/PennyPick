@@ -23,10 +23,14 @@
 ```
 pennypick/
 ├── backend-go/          # Go 后端
-│   ├── cmd/server/      # 入口
+│   ├── cmd/
+│   │   ├── server/      # 服务入口
+│   │   ├── dbview/      # 运维查看工具（解密查看 / dump SQL）
+│   │   └── dbencrypt/   # 加密运维工具（加密 / 解密 / 修改密码）
 │   └── internal/
 │       ├── config/      # 配置（环境变量）
-│       ├── database/    # SQLite 连接、迁移、默认数据初始化
+│       ├── crypto/      # 整库加解密（AES-256-GCM + Argon2id）
+│       ├── database/    # SQLite 连接、加密生命周期、迁移、默认数据初始化
 │       ├── model/       # 数据模型（用户/分类/账户/账单/预算）
 │       ├── middleware/  # JWT 认证、CORS
 │       └── handler/     # 业务处理（认证/分类/账户/账单/预算/统计/导出）
@@ -50,7 +54,7 @@ cd backend-go
 go run ./cmd/server
 ```
 
-默认监听 `:8003`，首次启动自动建库建表、创建默认账号并初始化预置分类/账户。
+默认监听 `:8003`，首次启动自动建库建表、创建默认账号并初始化预置分类/账户。**如需启用数据库加密，请设置 `PENNYPICK_DB_PASS` 环境变量（见下文「数据库加密与运维」）。**
 
 可用环境变量（`.env` 或系统环境变量）：
 
@@ -58,6 +62,7 @@ go run ./cmd/server
 | --- | --- | --- |
 | `PORT` | `8003` | 后端端口 |
 | `DATABASE_URL` | `sqlite:///./pennypick.db` | SQLite 文件路径 |
+| `PENNYPICK_DB_PASS` | 空 | 数据库主密码。**设置后启用整库加密**；首次带密码启动自动把明文库迁移为 `.enc`，之后每次启动以此密码解锁 |
 | `SECRET_KEY` | 随机串 | JWT 签名密钥（生产必须修改） |
 | `INIT_ADMIN_USERNAME` | `admin` | 初始用户名 |
 | `INIT_ADMIN_PASSWORD` | `admin123` | 初始密码 |
@@ -81,6 +86,84 @@ npm run dev
 4. **看统计**：统计页切换月份，查看分类占比、收支趋势、账户分布
 5. **导账单**：设置页选择时间范围与类型 → 导出 CSV
 6. **管分类**：分类管理页自定义分类的图标与颜色
+
+## 数据库加密与运维
+
+### 为什么加密
+
+SQLite 数据库文件本身没有密码保护，任何人拿到 `pennypick.db` 后都可以用 Navicat / DBeaver 等客户端直接查看全部账本数据。拾财后端采用**应用层 AES-256-GCM 整库加密**：加密后落盘文件为 `pennypick.db.enc`，属于自定义封装格式，常见数据库客户端无法识别，即使拷贝走也无法查看。
+
+### 加密原理
+
+- **密钥派生**：主密码经 **Argon2id**（64MB 内存 / 3 轮 / 4 并行）派生 32 字节 AES 密钥；主密码本身不落盘、不随文件保存。
+- **加密文件格式**：`magic(8B) | version(2B) | salt(16B) | nonce(12B) | AES-GCM 密文`，每次加密随机生成 salt 与 nonce。
+- **运行机制**：启动时用密码解密 `.enc` 到系统临时目录的临时明文文件供程序读取；运行中每 5 分钟自动回写加密一次；正常退出时回写 `.enc` 并删除临时明文；异常退出后遗留的临时数据会在下次启动时被自动回收并回写，不丢最近数据。
+
+### 启用加密（含已有数据迁移）
+
+1. **先备份**现有数据库文件（加密迁移前必备）：
+   ```bash
+   copy pennypick.db pennypick.db.bak-YYYYMMDD
+   ```
+2. 设置主密码环境变量并启动后端：
+   ```bash
+   set PENNYPICK_DB_PASS=你的强密码
+   go run ./cmd/server
+   ```
+   首次启动检测到明文 `pennypick.db` 且无 `.enc` 时，会自动加密生成 `pennypick.db.enc`，并把原明文保留为 `pennypick.db.bak-<时间戳>` 后删除。
+3. 之后每次启动都必须提供**同一个密码**：
+   ```bash
+   set PENNYPICK_DB_PASS=你的强密码
+   go run ./cmd/server
+   ```
+   - 密码错误会启动失败并提示解密失败，**不会破坏数据**。
+   - 未设置 `PENNYPICK_DB_PASS` 时以**明文模式**运行（仅限开发环境，启动会输出警告日志）。
+
+> **主密码请使用强随机值并妥善保管。密码不随数据库文件保存，丢失密码将无法恢复数据。**
+
+### 修改主密码
+
+```bash
+cd backend-go
+go build -o dbencrypt.exe ./cmd/dbencrypt
+dbencrypt.exe -mode chpass -file pennypick.db.enc
+```
+
+按提示输入当前密码与新密码（交互式输入、不回显；非交互环境可从 stdin 逐行读取）。
+
+### 系统管理员如何查询数据
+
+应用静置时磁盘上只有密文 `.enc`，管理员可通过以下方式查看数据：
+
+**方式一：`dbview` 运维工具（推荐，深度排查）**
+
+```bash
+cd backend-go
+go build -o dbview.exe ./cmd/dbview
+
+# 1) 解密为明文 db，用 Navicat / DBeaver 打开查看
+dbview.exe -file pennypick.db.enc -out view.db
+# 查看完后务必删除明文文件
+del view.db
+
+# 2) 或直接导出 SQL 脚本到屏幕/文件，全程不落明文 db 文件（更安全）
+dbview.exe -file pennypick.db.enc -dump > dump.sql
+```
+
+**方式二：环境变量解锁 + 应用内导出（日常运维）**
+
+以 `PENNYPICK_DB_PASS` 环境变量启动服务后，登录系统，使用「设置 → 导出账单 CSV」即可导出一份明文 CSV 查看业务数据，无需额外工具。
+
+**方式三：解密修改后重新加密（需要手动改数据时）**
+
+用方式一解密得到明文 db，修改完成后用 `dbencrypt.exe -mode encrypt -in view.db -out pennypick.db.enc` 重新加密回写。
+
+### 备份与安全建议
+
+- **备份请备份 `.enc` 加密文件**（备份本身不含密码，安全）；同时另行妥善保管主密码。
+- 明文解密产物（`view.db`、`dump.sql`）**用完即删**，不要长期留存。
+- 加密参数（magic / Argon2id 参数）统一由 `internal/crypto` 管理，主程序与 `dbview` / `dbencrypt` 共用，请用同一版本代码构建，避免参数漂移导致工具无法解密。
+- 系统层面可用 BitLocker / EFS 对数据盘加密，作为纵深防御的补充。
 
 ## 数据模型
 

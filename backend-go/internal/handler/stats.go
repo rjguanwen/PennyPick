@@ -49,7 +49,7 @@ func (h *Handler) Overview(c *gin.Context) {
 	var expense, income float64
 	for _, b := range bills {
 		if b.Type == model.TypeExpense {
-			expense += b.Amount
+			expense += b.NetAmount() // 支出按净额（扣减退款）
 		} else {
 			income += b.Amount
 		}
@@ -125,8 +125,8 @@ func (h *Handler) ByCategory(c *gin.Context) {
 			}
 			agg[b.CategoryID] = s
 		}
-		s.Total += b.Amount
-		total += b.Amount
+		s.Total += b.NetAmount() // 分类支出按净额（扣减退款）
+		total += b.NetAmount()
 	}
 	list := make([]CategoryStat, 0, len(agg))
 	for _, s := range agg {
@@ -191,7 +191,7 @@ func (h *Handler) Trend(c *gin.Context) {
 			byLabel[label] = p
 		}
 		if b.Type == model.TypeExpense {
-			p.Expense += b.Amount
+			p.Expense += b.NetAmount() // 支出按净额（扣减退款）
 		} else {
 			p.Income += b.Amount
 		}
@@ -313,7 +313,7 @@ func (h *Handler) AccountStats(c *gin.Context) {
 			agg[aid] = s
 		}
 		if b.Type == model.TypeExpense {
-			s.Expense += b.Amount
+			s.Expense += b.NetAmount() // 账户支出按净额（扣减退款）
 		} else {
 			s.Income += b.Amount
 		}

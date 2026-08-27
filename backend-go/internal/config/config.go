@@ -13,6 +13,7 @@ type Config struct {
 	Port        string
 	SecretKey   string
 	DatabaseURL string
+	DatabasePass string // 数据库主密码，空表示明文模式（仅开发环境）
 
 	AdminUsername string
 	AdminPassword string
@@ -28,6 +29,7 @@ func Load() *Config {
 		Port:          getEnv("PORT", "8003"),
 		SecretKey:     getEnv("SECRET_KEY", "please-change-me-to-a-random-secret"),
 		DatabaseURL:   getEnv("DATABASE_URL", "sqlite:///./pennypick.db"),
+		DatabasePass:  os.Getenv("PENNYPICK_DB_PASS"),
 		AdminUsername: getEnv("INIT_ADMIN_USERNAME", "admin"),
 		AdminPassword: getEnv("INIT_ADMIN_PASSWORD", "admin123"),
 		AdminNickname: getEnv("INIT_ADMIN_NICKNAME", "主人"),

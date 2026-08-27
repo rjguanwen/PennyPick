@@ -59,7 +59,7 @@ func BuildBillsCSV(db *gorm.DB, userID uint, start, end, typ string) (string, er
 
 	var sb strings.Builder
 	sb.WriteString("\xEF\xBB\xBF") // UTF-8 BOM
-	sb.WriteString("日期,类型,分类,账户,金额,标签,备注\n")
+	sb.WriteString("日期,类型,分类,账户,金额,退款,标签,备注\n")
 	for _, b := range bills {
 		typName := "支出"
 		if b.Type == model.TypeIncome {
@@ -76,12 +76,13 @@ func BuildBillsCSV(db *gorm.DB, userID uint, start, end, typ string) (string, er
 		for _, t := range b.Tags {
 			tagNames = append(tagNames, t.Name)
 		}
-		row := fmt.Sprintf("%s,%s,%s,%s,%.2f,%s,%s\n",
+		row := fmt.Sprintf("%s,%s,%s,%s,%.2f,%.2f,%s,%s\n",
 			b.OccurredAt.Time.Format("2006-01-02 15:04"),
 			typName,
 			csvEscape(catName),
 			csvEscape(accName),
 			b.Amount,
+			b.RefundAmount,
 			csvEscape(strings.Join(tagNames, "|")),
 			csvEscape(b.Note),
 		)

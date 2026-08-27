@@ -43,7 +43,7 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock, Postcard } from '@element-plus/icons-vue'
@@ -59,6 +59,12 @@ const loading = ref(false)
 const loginForm = reactive({ username: '', password: '' })
 const regForm = reactive({ username: '', nickname: '', password: '', confirm: '' })
 
+onMounted(() => {
+  // 默认填入上次成功登录的用户名
+  const last = localStorage.getItem('last_username')
+  if (last) loginForm.username = last
+})
+
 async function onLogin() {
   if (!loginForm.username || !loginForm.password) {
     ElMessage.warning('请输入用户名和密码')
@@ -67,6 +73,7 @@ async function onLogin() {
   loading.value = true
   try {
     await auth.login(loginForm.username, loginForm.password)
+    localStorage.setItem('last_username', loginForm.username.trim())
     ElMessage.success('欢迎回来！')
     router.push(route.query.redirect || '/dashboard')
   } finally {

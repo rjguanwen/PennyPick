@@ -1,10 +1,25 @@
-# 后端
-backend-go/pennypick-server.exe
-backend-go/pennypick.db
-backend-go/*.log
-backend-go/.env
+# ===== 敏感数据 =====
+*.db
+*.db.bak*
+*.db.enc*
+*.enc.meta
+*.enc.tmp
+dbkey.bin
 
-# 前端
+# ===== 日志 =====
+*.log
+
+# ===== 后端（Go）=====
+backend-go/.env
+backend-go/*.exe
+backend-go/*.exe~
+# 测试/调试残留
+backend-go/pass_tmp.txt
+backend-go/stdin_probe.go
+backend-go/dump_test.sql
+backend-go/test_out.txt
+
+# ===== 前端 =====
 frontend/node_modules/
 frontend/dist/
 frontend/*.log
@@ -12,15 +27,15 @@ frontend/*.log
 # 浏览器调试工具（本地临时）
 debug-pw/
 
-# 编辑器
+# ===== 编辑器 =====
 .idea/
 .vscode/
 *.swp
 
-# 环境变量
+# ===== 环境变量 =====
 .env
 !.env.example
 
-# 编译生成的可执行文件
+# ===== 兜底：可执行文件 =====
 *.exe
 *.exe~

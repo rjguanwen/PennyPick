@@ -137,7 +137,7 @@ func (h *Handler) ListCategoryBudgets(c *gin.Context) {
 		Total      float64
 	}
 	h.db.Model(&model.Bill{}).
-		Select("category_id, COALESCE(SUM(amount), 0) as total").
+		Select("category_id, COALESCE(SUM(amount - refund_amount), 0) as total").
 		Where("user_id = ? AND type = ? AND occurred_at >= ? AND occurred_at < ?", cu.ID, model.TypeExpense, start, end).
 		Group("category_id").Scan(&rows)
 	usedMap := map[uint]float64{}

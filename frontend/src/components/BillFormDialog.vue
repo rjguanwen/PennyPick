@@ -186,6 +186,9 @@ async function save() {
       occurred_at: form.occurred_at,
       note: form.note,
       tag_ids,
+      // 编辑时保留已有退款信息，避免被整体更新误清
+      refund_amount: props.bill ? Number(props.bill.refund_amount || 0) : 0,
+      refunded_at: props.bill?.refunded_at || '',
     }
     if (props.bill) {
       await billApi.update(props.bill.id, payload)

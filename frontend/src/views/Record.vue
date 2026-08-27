@@ -134,7 +134,13 @@ const displayAmount = computed(() => {
 const sortedCategories = computed(() => {
   return [...categories.value]
     .filter((c) => c.type === form.type)
-    .sort((a, b) => (b.recent_count || 0) - (a.recent_count || 0))
+    .sort((a, b) => {
+      // 「其他」分类固定排在最后，其余按近期使用次数降序
+      const aOther = a.name === '其他' ? 1 : 0
+      const bOther = b.name === '其他' ? 1 : 0
+      if (aOther !== bOther) return aOther - bOther
+      return (b.recent_count || 0) - (a.recent_count || 0)
+    })
 })
 
 function setType(t) {

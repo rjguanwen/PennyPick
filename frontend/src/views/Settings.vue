@@ -85,11 +85,21 @@
         <div class="about-logo">💰</div>
         <div class="about-name">拾财 PennyPick</div>
         <div class="about-desc">个人记账应用：轻松记下每一笔消费，多维度统计分析，科学规划预算，帮你管好每一分钱。</div>
-        <div class="about-item"><span>版本</span><b>1.0.1</b></div>
+        <div class="about-item"><span>版本</span><b>1.1.0</b></div>
         <div class="about-item"><span>开发者</span><b>关文</b></div>
         <div class="about-item"><span>邮箱</span><b>rjguanwen001@163.com</b></div>
-        <div class="about-item"><span>发布时间</span><b>2026-08-25</b></div>
+        <div class="about-item"><span>发布时间</span><b>2026-08-27</b></div>
         <div class="about-item"><span>技术栈</span><b>Vue 3 · Element Plus · Go</b></div>
+      </div>
+    </div>
+
+    <!-- 赞助支持 -->
+    <div class="pp-card">
+      <div class="card-title"><el-icon><Coffee /></el-icon> 赞助支持</div>
+      <div class="donate">
+        <p class="donate-tip">拾财完全免费使用。如果您觉得它好用，欢迎自愿扫码请开发者喝杯咖啡——付多少、付不付，都不影响任何功能的使用。</p>
+        <img :src="donateImg" class="donate-qr" alt="微信收款码" />
+        <p class="donate-note">微信扫码支付</p>
       </div>
     </div>
   </div>
@@ -98,7 +108,8 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CollectionTag, Download, Plus, Lock, InfoFilled } from '@element-plus/icons-vue'
+import { CollectionTag, Download, Plus, Lock, InfoFilled, Coffee } from '@element-plus/icons-vue'
+import donateImg from '../assets/skzh.png'
 import { authApi, exportApi, tagApi } from '../api'
 import { useAuthStore } from '../stores/auth'
 import { nowDate } from '../utils/format'
@@ -319,5 +330,26 @@ onMounted(async () => {
 }
 .about-item b {
   color: #303133;
+}
+.donate {
+  text-align: center;
+}
+.donate-tip {
+  font-size: 13px;
+  color: #909399;
+  line-height: 1.7;
+  margin: 0 0 14px;
+  text-align: left;
+}
+.donate-qr {
+  width: 200px;
+  height: 200px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(31, 45, 61, 0.1);
+}
+.donate-note {
+  font-size: 12px;
+  color: #c0c4cc;
+  margin-top: 8px;
 }
 </style>

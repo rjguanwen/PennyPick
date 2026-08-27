@@ -58,9 +58,15 @@
               </div>
             </div>
             <div class="bill-right">
+              <el-tag v-if="b.type === 'expense' && b.refund_amount > 0" size="small" type="success" effect="plain" class="refund-tag">
+                退 ¥{{ formatMoney(b.refund_amount) }}
+              </el-tag>
               <span class="bill-amount" :class="b.type === 'income' ? 'money-income' : 'money-expense'">
                 {{ b.type === 'income' ? '+' : '-' }}¥{{ formatMoney(b.amount) }}
               </span>
+              <el-button v-if="b.type === 'expense'" link type="warning" size="small" class="refund-btn" @click.stop="openRefund(b)">
+                {{ b.refund_amount > 0 ? '改退款' : '退款' }}
+              </el-button>
               <el-button link type="danger" size="small" class="del-btn" @click.stop="remove(b)">删除</el-button>
             </div>
           </div>
@@ -73,6 +79,39 @@
     </div>
 
     <BillFormDialog v-model="editVisible" :bill="editingBill" :categories="allCategories" :accounts="accounts" :tags="allTags" @saved="load(true)" />
+
+    <!-- 退款登记弹窗 -->
+    <el-dialog v-model="refundVisible" title="登记退款" width="min(380px, 92vw)" :close-on-click-modal="false">
+      <div v-if="refundBill" class="refund-info">
+        原支出：{{ refundBill.category?.name || '未知分类' }} · ¥{{ formatMoney(refundBill.amount) }}
+      </div>
+      <el-form label-position="top">
+        <el-form-item label="退款金额（填 0 表示撤销退款）">
+          <el-input-number
+            v-model="refundForm.amount"
+            :min="0"
+            :max="Number(refundBill?.amount || 0)"
+            :precision="2"
+            :step="1"
+            controls-position="right"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="退款日期">
+          <el-date-picker
+            v-model="refundForm.date"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="选择退款日期"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="refundVisible = false">取消</el-button>
+        <el-button type="primary" :loading="refundSaving" @click="saveRefund">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -82,7 +121,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { accountApi, billApi, categoryApi, tagApi } from '../api'
-import { currentMonth, dateLabel, formatMoney, shiftMonth } from '../utils/format'
+import { currentMonth, dateLabel, formatMoney, nowDate, shiftMonth } from '../utils/format'
 import CatIcon from '../components/CatIcon.vue'
 import BillFormDialog from '../components/BillFormDialog.vue'
 
@@ -184,6 +223,53 @@ async function remove(bill) {
   await billApi.remove(bill.id)
   ElMessage.success('已删除')
   load(true)
+}
+
+const refundVisible = ref(false)
+const refundBill = ref(null)
+const refundSaving = ref(false)
+const refundForm = reactive({ amount: 0, date: '' })
+
+function openRefund(bill) {
+  refundBill.value = bill
+  refundForm.amount = Number(bill.refund_amount || 0)
+  refundForm.date = bill.refunded_at ? bill.refunded_at.slice(0, 10) : nowDate()
+  refundVisible.value = true
+}
+
+async function saveRefund() {
+  const b = refundBill.value
+  if (!b) return
+  if (refundForm.amount < 0 || refundForm.amount > Number(b.amount)) {
+    ElMessage.warning(`退款金额需在 0 与 ${formatMoney(b.amount)} 之间`)
+    return
+  }
+  if (refundForm.amount > 0 && !refundForm.date) {
+    ElMessage.warning('请选择退款日期')
+    return
+  }
+  refundSaving.value = true
+  try {
+    const payload = {
+      type: b.type,
+      amount: Number(b.amount),
+      category_id: b.category_id,
+      account_id: b.account_id || null,
+      occurred_at: (b.occurred_at || '').slice(0, 16),
+      note: b.note || '',
+      tag_ids: (b.tags || []).map((t) => t.id),
+      refund_amount: refundForm.amount,
+      refunded_at: refundForm.amount > 0 ? refundForm.date : '',
+    }
+    await billApi.update(b.id, payload)
+    ElMessage.success(refundForm.amount > 0 ? '退款已登记' : '已撤销退款')
+    refundVisible.value = false
+    load(true)
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    refundSaving.value = false
+  }
 }
 
 onMounted(async () => {
@@ -335,6 +421,21 @@ onMounted(async () => {
 }
 .bill-item:hover .del-btn {
   display: inline-flex;
+}
+.refund-btn {
+  display: none;
+}
+.bill-item:hover .refund-btn {
+  display: inline-flex;
+}
+.refund-tag {
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.refund-info {
+  font-size: 13px;
+  color: #909399;
+  margin-bottom: 12px;
 }
 .more {
   text-align: center;

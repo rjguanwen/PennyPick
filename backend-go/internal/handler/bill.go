@@ -15,13 +15,15 @@ import (
 )
 
 type billReq struct {
-	CategoryID uint    `json:"category_id"`
-	AccountID  *uint   `json:"account_id"`
-	Type       string  `json:"type"`
-	Amount     float64 `json:"amount"`
-	Note       string  `json:"note"`
-	OccurredAt string  `json:"occurred_at"`
-	TagIDs     []uint  `json:"tag_ids"`
+	CategoryID   uint    `json:"category_id"`
+	AccountID    *uint   `json:"account_id"`
+	Type         string  `json:"type"`
+	Amount       float64 `json:"amount"`
+	Note         string  `json:"note"`
+	OccurredAt   string  `json:"occurred_at"`
+	RefundAmount float64 `json:"refund_amount"` // 退款金额（仅支出可登记，0 表示未退款）
+	RefundedAt   string  `json:"refunded_at"`   // 退款时间（YYYY-MM-DD 或 YYYY-MM-DD HH:mm，可选）
+	TagIDs       []uint  `json:"tag_ids"`
 }
 
 // validate 校验并返回规范化后的账单。ok=false 表示校验失败。
@@ -32,10 +34,32 @@ func (r *billReq) validate() (bool, string) {
 	if r.Amount <= 0 || r.Amount > 999999999 {
 		return false, "金额需大于 0"
 	}
+	if r.RefundAmount < 0 || r.RefundAmount > r.Amount {
+		return false, "退款金额需在 0 与账单金额之间"
+	}
+	if r.Type != model.TypeExpense && r.RefundAmount > 0 {
+		return false, "仅支出账单可登记退款"
+	}
 	if utf8.RuneCountInString(r.Note) > 255 {
 		return false, "备注不能超过 255 个字符"
 	}
 	return true, ""
+}
+
+// refundedAt 解析退款时间；未填写且登记退款时返回当前时间，未退款返回 nil。
+func (r *billReq) refundedAt() *model.DateTime {
+	if r.RefundAmount <= 0 {
+		return nil
+	}
+	if s := strings.TrimSpace(r.RefundedAt); s != "" {
+		if t, err := time.ParseInLocation("2006-01-02 15:04", s, time.Local); err == nil {
+			return &model.DateTime{Time: t}
+		}
+		if t, err := time.ParseInLocation("2006-01-02", s, time.Local); err == nil {
+			return &model.DateTime{Time: t}
+		}
+	}
+	return &model.DateTime{Time: time.Now()}
 }
 
 func (r *billReq) occurredAt(defaultNow bool) time.Time {
@@ -98,6 +122,11 @@ func (h *Handler) ListBills(c *gin.Context) {
 	if tagID := c.Query("tag_id"); tagID != "" {
 		q = q.Where("id IN (SELECT bill_id FROM bill_tags WHERE tag_id = ?)", tagID)
 	}
+	if rf := c.Query("refunded"); rf == "true" {
+		q = q.Where("refund_amount > 0")
+	} else if rf == "false" {
+		q = q.Where("refund_amount = 0")
+	}
 	if kw := strings.TrimSpace(c.Query("keyword")); kw != "" {
 		q = q.Where("note LIKE ?", "%"+kw+"%")
 	}
@@ -156,13 +185,15 @@ func (h *Handler) CreateBill(c *gin.Context) {
 	}
 
 	bill := &model.Bill{
-		UserID:     cu.ID,
-		CategoryID: req.CategoryID,
-		AccountID:  req.AccountID,
-		Type:       req.Type,
-		Amount:     model.Round2(req.Amount),
-		Note:       strings.TrimSpace(req.Note),
-		OccurredAt: model.DateTime{Time: req.occurredAt(true)},
+		UserID:       cu.ID,
+		CategoryID:   req.CategoryID,
+		AccountID:    req.AccountID,
+		Type:         req.Type,
+		Amount:       model.Round2(req.Amount),
+		Note:         strings.TrimSpace(req.Note),
+		OccurredAt:   model.DateTime{Time: req.occurredAt(true)},
+		RefundAmount: model.Round2(req.RefundAmount),
+		RefundedAt:   req.refundedAt(),
 	}
 	if err := h.db.Create(bill).Error; err != nil {
 		fail(c, 500, "保存失败")
@@ -219,6 +250,8 @@ func (h *Handler) UpdateBill(c *gin.Context) {
 	bill.Type = req.Type
 	bill.Amount = model.Round2(req.Amount)
 	bill.Note = strings.TrimSpace(req.Note)
+	bill.RefundAmount = model.Round2(req.RefundAmount)
+	bill.RefundedAt = req.refundedAt()
 
 	if err := h.db.Save(&bill).Error; err != nil {
 		fail(c, 500, "保存失败")
@@ -317,13 +350,15 @@ func (h *Handler) BatchCreateBills(c *gin.Context) {
 				return fmt.Errorf("第 %d 笔：分类不存在或与账单类型不匹配", i+1)
 			}
 			bill := &model.Bill{
-				UserID:     cu.ID,
-				CategoryID: it.CategoryID,
-				AccountID:  &req.AccountID,
-				Type:       it.Type,
-				Amount:     model.Round2(it.Amount),
-				Note:       strings.TrimSpace(it.Note),
-				OccurredAt: model.DateTime{Time: it.occurredAt(true)},
+				UserID:       cu.ID,
+				CategoryID:   it.CategoryID,
+				AccountID:    &req.AccountID,
+				Type:         it.Type,
+				Amount:       model.Round2(it.Amount),
+				Note:         strings.TrimSpace(it.Note),
+				OccurredAt:   model.DateTime{Time: it.occurredAt(true)},
+				RefundAmount: model.Round2(it.RefundAmount),
+				RefundedAt:   it.refundedAt(),
 			}
 			if err := tx.Create(bill).Error; err != nil {
 				return err

@@ -110,11 +110,23 @@ type Bill struct {
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 
+	// 消费退款：仅支出账单可登记；RefundAmount>0 表示已退款，统计时支出按净额计算。
+	RefundAmount float64   `gorm:"default:0;not null" json:"refund_amount"`
+	RefundedAt   *DateTime `json:"refunded_at,omitempty"`
+
 	RecurringBillID *uint `gorm:"index" json:"recurring_bill_id"` // 来源固定账单（由固定账单记入时标记，用于防重复）
 
 	Category *Category `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
 	Account  *Account  `gorm:"foreignKey:AccountID" json:"account,omitempty"`
 	Tags     []Tag     `gorm:"many2many:bill_tags;" json:"tags,omitempty"`
+}
+
+// NetAmount 净金额：支出扣减退款，收入不变。
+func (b *Bill) NetAmount() float64 {
+	if b.Type == TypeExpense {
+		return Round2(b.Amount - b.RefundAmount)
+	}
+	return Round2(b.Amount)
 }
 
 // Budget 月度总预算（按月设置预警）。
