@@ -112,11 +112,14 @@ export const recurringBillApi = {
   apply: (data) => api.post('/recurring-bills/apply', data),
 }
 
-// ===== 月度报告 =====
+// ===== 收支报告（月度 + 年度）=====
 export const reportsApi = {
   list: () => api.get('/reports'),
   generate: (data) => api.post('/reports/generate', data),
   detail: (id) => api.get(`/reports/${id}`),
+  yearlyGenerate: (data) => api.post('/reports/yearly', data),
+  yearlyList: () => api.get('/reports/yearly/list'),
+  yearlyDetail: (id) => api.get(`/reports/yearly/${id}`),
 }
 
 // ===== 统计 =====

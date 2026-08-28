@@ -181,6 +181,17 @@ type MonthlyReport struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+// YearlyReport 年度收支报告（同一年份只保留一份，再次生成覆盖；唯一性由代码 upsert 保证）。
+type YearlyReport struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	UserID       uint      `gorm:"index;not null" json:"user_id"`
+	Year         string    `gorm:"size:4;index;not null" json:"year"` // YYYY
+	ExpenseTotal float64   `json:"expense_total"`
+	IncomeTotal  float64   `json:"income_total"`
+	Data         string    `gorm:"type:text" json:"-"` // 报告 JSON 数据
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 // CategoryPreset 预置分类定义。
 type CategoryPreset struct {
 	Name  string

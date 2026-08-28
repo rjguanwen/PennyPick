@@ -22,7 +22,7 @@
         <el-menu-item index="/bills"><el-icon><Tickets /></el-icon><span>账单查询</span></el-menu-item>
         <el-menu-item index="/repayment"><el-icon><CreditCard /></el-icon><span>账户还款</span></el-menu-item>
         <el-menu-item index="/stats"><el-icon><DataAnalysis /></el-icon><span>统计分析</span></el-menu-item>
-        <el-menu-item index="/reports"><el-icon><Document /></el-icon><span>月度报告</span></el-menu-item>
+        <el-menu-item index="/reports"><el-icon><Document /></el-icon><span>收支报告</span></el-menu-item>
         <el-menu-item index="/budget"><el-icon><Odometer /></el-icon><span>预算管理</span></el-menu-item>
         <el-menu-item index="/categories"><el-icon><Grid /></el-icon><span>分类管理</span></el-menu-item>
         <el-menu-item index="/accounts"><el-icon><Wallet /></el-icon><span>账户管理</span></el-menu-item>
