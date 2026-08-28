@@ -114,6 +114,13 @@ export const recurringBillApi = {
   apply: (data) => api.post('/recurring-bills/apply', data),
 }
 
+// ===== 操作日志（仅管理员）=====
+export const oplogApi = {
+  setting: () => api.get('/settings/oplog'),
+  setEnabled: (enabled) => api.put('/settings/oplog', { enabled }),
+  list: (params) => api.get('/oplogs', { params }),
+}
+
 // ===== 收支报告（月度 + 年度）=====
 export const reportsApi = {
   list: () => api.get('/reports'),

@@ -21,6 +21,7 @@ const routes = [
       { path: 'repayment', name: 'repayment', component: () => import('../views/Repayment.vue'), meta: { title: '账户还款' } },
       { path: 'stats', name: 'stats', component: () => import('../views/Stats.vue'), meta: { title: '统计分析' } },
       { path: 'reports', name: 'reports', component: () => import('../views/MonthlyReport.vue'), meta: { title: '收支报告' } },
+      { path: 'oplogs', name: 'oplogs', component: () => import('../views/OpLogs.vue'), meta: { title: '操作日志' } },
       { path: 'budget', name: 'budget', component: () => import('../views/Budget.vue'), meta: { title: '预算管理' } },
       { path: 'categories', name: 'categories', component: () => import('../views/CategoryManage.vue'), meta: { title: '分类管理' } },
       { path: 'accounts', name: 'accounts', component: () => import('../views/AccountManage.vue'), meta: { title: '账户管理' } },

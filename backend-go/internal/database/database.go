@@ -299,6 +299,8 @@ func Migrate(db *gorm.DB) error {
 		&model.YearlyReport{},
 		&model.BillImport{},
 		&model.BillImportItem{},
+		&model.SystemSetting{},
+		&model.OperationLog{},
 	); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
 	}

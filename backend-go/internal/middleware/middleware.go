@@ -77,6 +77,23 @@ func (a *Auth) currentUser(c *gin.Context) (*UserContext, bool) {
 	return a.ParseUserFromToken(tokenStr)
 }
 
+// RequireAdmin 要求登录且为管理员（用于操作日志等仅管理员功能）。
+func (a *Auth) RequireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, ok := a.currentUser(c)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"detail": "登录凭证无效或已过期"})
+			return
+		}
+		if user.Username != a.cfg.AdminUsername {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"detail": "仅管理员可访问"})
+			return
+		}
+		c.Set("user", user)
+		c.Next()
+	}
+}
+
 // ParseUserFromToken 从 Bearer token 解析当前用户（供非 HTTP 场景复用）。
 func (a *Auth) ParseUserFromToken(tokenStr string) (*UserContext, bool) {
 	if tokenStr == "" {

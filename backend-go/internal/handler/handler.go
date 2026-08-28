@@ -30,7 +30,7 @@ func currentUser(c *gin.Context) *middleware.UserContext {
 
 // RegisterRoutes 注册全部路由
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
-	api := r.Group("/api")
+	api := r.Group("/api", middleware.OpLogger(h.db))
 
 	// 公开接口
 	api.POST("/auth/login", h.Login)
@@ -115,4 +115,12 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 	// 导出
 	user.GET("/export", h.ExportBills)
+
+	// 操作日志（仅管理员：查看 + 开关设置）
+	admin := user.Group("", h.auth.RequireAdmin())
+	{
+		admin.GET("/settings/oplog", h.GetOpLogSetting)
+		admin.PUT("/settings/oplog", h.SetOpLogSetting)
+		admin.GET("/oplogs", h.ListOpLogs)
+	}
 }

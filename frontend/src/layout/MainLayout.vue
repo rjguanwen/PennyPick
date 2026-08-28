@@ -26,6 +26,7 @@
         <el-menu-item index="/budget"><el-icon><Odometer /></el-icon><span>预算管理</span></el-menu-item>
         <el-menu-item index="/categories"><el-icon><Grid /></el-icon><span>分类管理</span></el-menu-item>
         <el-menu-item index="/accounts"><el-icon><Wallet /></el-icon><span>账户管理</span></el-menu-item>
+        <el-menu-item v-if="isAdmin" index="/oplogs"><el-icon><Tickets /></el-icon><span>操作日志</span></el-menu-item>
         <el-menu-item index="/settings"><el-icon><Setting /></el-icon><span>设置</span></el-menu-item>
       </el-menu>
       <div class="aside-footer">
@@ -82,6 +83,8 @@ const auth = useAuthStore()
 
 const pageTitle = computed(() => route.meta.title || '')
 const avatarText = computed(() => (auth.displayName || '?').charAt(0))
+// 操作日志等仅管理员可见
+const isAdmin = computed(() => auth.user?.username === 'admin')
 
 function onCommand(cmd) {
   if (cmd === 'logout') {

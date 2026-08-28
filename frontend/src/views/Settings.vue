@@ -93,6 +93,19 @@
       </div>
     </div>
 
+    <!-- 操作日志（仅管理员） -->
+    <div v-if="isAdmin" class="pp-card">
+      <div class="card-title"><el-icon><Tickets /></el-icon> 操作日志</div>
+      <div class="oplog-form">
+        <p class="oplog-tip">开启后将记录登录、记账、修改、删除等重要操作，便于排查问题。因日志数据量较大，默认关闭。</p>
+        <div class="oplog-row">
+          <span class="oplog-label">记录操作日志</span>
+          <el-switch v-model="opLogEnabled" :loading="opLogSaving" @change="onOpLogChange" />
+        </div>
+        <el-button type="primary" plain :icon="Tickets" @click="router.push('/oplogs')">查看操作日志</el-button>
+      </div>
+    </div>
+
     <!-- 赞助支持 -->
     <div class="pp-card">
       <div class="card-title"><el-icon><Coffee /></el-icon> 赞助支持</div>
@@ -108,9 +121,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CollectionTag, Download, Plus, Lock, InfoFilled, Coffee } from '@element-plus/icons-vue'
+import { CollectionTag, Download, Plus, Lock, InfoFilled, Coffee, Tickets } from '@element-plus/icons-vue'
 import donateImg from '../assets/skzh.png'
-import { authApi, exportApi, tagApi } from '../api'
+import { authApi, exportApi, tagApi, oplogApi } from '../api'
 import { useAuthStore } from '../stores/auth'
 import { nowDate } from '../utils/format'
 import { useRouter } from 'vue-router'
@@ -130,6 +143,36 @@ const exporting = ref(false)
 
 const pwd = reactive({ old_password: '', new_password: '', confirm: '' })
 const pwdSaving = ref(false)
+
+// 操作日志（仅管理员）
+const isAdmin = computed(() => auth.user?.username === 'admin')
+const opLogEnabled = ref(false)
+const opLogSaving = ref(false)
+
+async function onOpLogChange(val) {
+  if (val) {
+    // 显式提醒开启后数据量会大大增加
+    try {
+      await ElMessageBox.confirm(
+        '开启操作日志后，应用将记录所有重要操作（登录、记账、修改、删除等），日志数据量会大大增加。确认开启吗？',
+        '开启操作日志',
+        { type: 'warning', confirmButtonText: '确认开启' },
+      )
+    } catch (e) {
+      opLogEnabled.value = false // 用户取消
+      return
+    }
+  }
+  opLogSaving.value = true
+  try {
+    await oplogApi.setEnabled(val)
+    ElMessage.success(val ? '操作日志已开启' : '操作日志已关闭')
+  } catch (e) {
+    opLogEnabled.value = !val
+  } finally {
+    opLogSaving.value = false
+  }
+}
 
 async function loadTags() {
   tags.value = (await tagApi.list()) || []
@@ -214,6 +257,14 @@ async function changePassword() {
 
 onMounted(async () => {
   loadTags()
+  if (isAdmin.value) {
+    try {
+      const s = await oplogApi.setting()
+      opLogEnabled.value = !!s.enabled
+    } catch (e) {
+      // 忽略：开关保持默认关闭
+    }
+  }
   const end = new Date()
   const start = new Date()
   start.setMonth(start.getMonth() - 1)
@@ -351,5 +402,21 @@ onMounted(async () => {
   font-size: 12px;
   color: #c0c4cc;
   margin-top: 8px;
+}
+.oplog-tip {
+  font-size: 13px;
+  color: #909399;
+  line-height: 1.7;
+  margin: 0 0 12px;
+}
+.oplog-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.oplog-label {
+  font-size: 14px;
+  color: #303133;
 }
 </style>

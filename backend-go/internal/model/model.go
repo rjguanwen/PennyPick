@@ -181,6 +181,27 @@ type MonthlyReport struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+// SystemSetting 系统设置（key-value，如操作日志开关）。
+type SystemSetting struct {
+	Key   string `gorm:"primaryKey;size:64" json:"key"`
+	Value string `gorm:"size:255" json:"value"`
+	// UpdatedAt 更新时间
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// OperationLog 操作日志（默认关闭，仅管理员开启后可记录与查看）。
+type OperationLog struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"index;not null" json:"user_id"`
+	Username  string    `gorm:"size:64" json:"username"`
+	Action    string    `gorm:"size:64;index" json:"action"` // 操作描述（如 记一笔 / 删除账单）
+	Method    string    `gorm:"size:8" json:"method"`
+	Path      string    `gorm:"size:128" json:"path"`
+	IP        string    `gorm:"size:45" json:"ip"`
+	Status    int       `gorm:"default:200" json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // YearlyReport 年度收支报告（同一年份只保留一份，再次生成覆盖；唯一性由代码 upsert 保证）。
 type YearlyReport struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
