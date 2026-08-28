@@ -101,6 +101,8 @@ export const budgetApi = {
   upsertCategory: (data) => api.put('/budgets/category', data),
   removeCategory: (month, categoryId) =>
     api.delete('/budgets/category', { params: { month, category_id: categoryId } }),
+  // 复制预算：把某月预算复制到另一月（覆盖目标月）
+  copy: (data) => api.post('/budgets/copy', data),
 }
 
 // ===== 固定账单 =====

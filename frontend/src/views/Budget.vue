@@ -1,12 +1,13 @@
 <template>
   <div class="budget">
-    <!-- 月份切换 -->
+    <!-- 月份切换 + 复制预算 -->
     <div class="head">
       <div class="month-switch">
         <button type="button" class="pp-tap" @click="month = shiftMonth(month, -1); load()"><el-icon><ArrowLeft /></el-icon></button>
         <el-date-picker v-model="month" type="month" value-format="YYYY-MM" format="YYYY年MM月" :clearable="false" class="month-picker" @change="load" />
         <button type="button" class="pp-tap" @click="month = shiftMonth(month, 1); load()"><el-icon><ArrowRight /></el-icon></button>
       </div>
+      <el-button :icon="CopyDocument" @click="openCopyDialog">复制预算</el-button>
     </div>
 
     <!-- 总预算：当前月状态 -->
@@ -108,6 +109,20 @@
       </div>
     </div>
 
+    <!-- 复制预算弹窗 -->
+    <el-dialog v-model="copyVisible" title="复制预算" width="min(420px, 92vw)" :close-on-click-modal="false">
+      <div class="copy-tip">将所选月份的预算（总预算 + 分类预算）复制到 <b>{{ monthLabel(month) }}</b>，目标月已有预算将被覆盖。</div>
+      <el-form label-position="top">
+        <el-form-item label="选择要复制的月份">
+          <el-date-picker v-model="copyFromMonth" type="month" value-format="YYYY-MM" format="YYYY年MM月" :clearable="false" style="width: 100%" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="copyVisible = false">取消</el-button>
+        <el-button type="primary" :loading="copying" @click="doCopyBudget">复制</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 分类预算设置弹窗 -->
     <el-dialog
       v-model="cbDialogVisible"
@@ -140,6 +155,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { CopyDocument } from '@element-plus/icons-vue'
 import { budgetApi, statsApi } from '../api'
 import { currentMonth, formatMoney, monthLabel, shiftMonth } from '../utils/format'
 import CatIcon from '../components/CatIcon.vue'
@@ -322,6 +338,38 @@ async function removeBudget() {
   load()
 }
 
+// ===== 复制预算 =====
+const copyVisible = ref(false)
+const copyFromMonth = ref('')
+const copying = ref(false)
+
+function openCopyDialog() {
+  copyFromMonth.value = shiftMonth(month.value, -1)
+  copyVisible.value = true
+}
+
+async function doCopyBudget() {
+  if (!copyFromMonth.value) {
+    ElMessage.warning('请选择要复制的月份')
+    return
+  }
+  if (copyFromMonth.value === month.value) {
+    ElMessage.warning('源月份不能与当前月份相同')
+    return
+  }
+  copying.value = true
+  try {
+    const res = await budgetApi.copy({ from_month: copyFromMonth.value, to_month: month.value })
+    ElMessage.success(`已复制：总预算${res.total_copied ? '已复制' : '（源无）'}，分类预算 ${res.category_count} 项`)
+    copyVisible.value = false
+    load()
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    copying.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -332,8 +380,18 @@ onMounted(load)
 }
 .head {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 12px;
+}
+.copy-tip {
+  font-size: 13px;
+  color: #909399;
+  line-height: 1.7;
+  margin-bottom: 14px;
+}
+.copy-tip b {
+  color: #409eff;
 }
 .month-switch {
   display: flex;

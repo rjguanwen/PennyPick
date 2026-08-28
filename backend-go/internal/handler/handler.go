@@ -103,6 +103,8 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	user.GET("/budgets/categories", h.ListCategoryBudgets)
 	user.PUT("/budgets/category", h.UpsertCategoryBudget)
 	user.DELETE("/budgets/category", h.DeleteCategoryBudget)
+	// 预算复制
+	user.POST("/budgets/copy", h.CopyBudget)
 
 	// 统计
 	user.GET("/stats/overview", h.Overview)

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"pennypickbackend/internal/model"
 )
@@ -234,4 +235,82 @@ func (h *Handler) DeleteCategoryBudget(c *gin.Context) {
 	}
 	h.db.Where("user_id = ? AND month = ? AND category_id = ?", cu.ID, month, catID).Delete(&model.CategoryBudget{})
 	c.JSON(200, gin.H{"ok": true})
+}
+
+// CopyBudget 将源月份预算（总预算 + 分类预算）复制到目标月份，覆盖目标月已有预算。
+func (h *Handler) CopyBudget(c *gin.Context) {
+	cu := currentUser(c)
+	var req struct {
+		FromMonth string `json:"from_month"`
+		ToMonth   string `json:"to_month"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		badRequest(c, "请求参数有误")
+		return
+	}
+	req.FromMonth = strings.TrimSpace(req.FromMonth)
+	req.ToMonth = strings.TrimSpace(req.ToMonth)
+	if _, _, ok := monthRange(req.FromMonth); !ok {
+		badRequest(c, "源月份格式不正确")
+		return
+	}
+	if _, _, ok := monthRange(req.ToMonth); !ok {
+		badRequest(c, "目标月份格式不正确")
+		return
+	}
+	if req.FromMonth == req.ToMonth {
+		badRequest(c, "源月份与目标月份不能相同")
+		return
+	}
+
+	// 读取源月预算
+	var src model.Budget
+	h.db.Where("user_id = ? AND month = ?", cu.ID, req.FromMonth).First(&src)
+	var srcCbs []model.CategoryBudget
+	h.db.Where("user_id = ? AND month = ?", cu.ID, req.FromMonth).Find(&srcCbs)
+	if src.ID == 0 && len(srcCbs) == 0 {
+		badRequest(c, "源月份没有可复制的预算")
+		return
+	}
+
+	// 事务写入目标月（总预算 upsert，分类预算先清后写，实现整体覆盖）
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		if src.ID != 0 {
+			var dst model.Budget
+			if err := tx.Where("user_id = ? AND month = ?", cu.ID, req.ToMonth).First(&dst).Error; err == nil {
+				dst.Amount = src.Amount
+				dst.WarnPercent = src.WarnPercent
+				if err := tx.Save(&dst).Error; err != nil {
+					return err
+				}
+			} else {
+				dst = model.Budget{UserID: cu.ID, Month: req.ToMonth, Amount: src.Amount, WarnPercent: src.WarnPercent}
+				if err := tx.Create(&dst).Error; err != nil {
+					return err
+				}
+			}
+		}
+		// 分类预算：目标月清空后写入
+		if err := tx.Where("user_id = ? AND month = ?", cu.ID, req.ToMonth).Delete(&model.CategoryBudget{}).Error; err != nil {
+			return err
+		}
+		for _, cb := range srcCbs {
+			dst := model.CategoryBudget{
+				UserID:      cu.ID,
+				Month:       req.ToMonth,
+				CategoryID:  cb.CategoryID,
+				Amount:      cb.Amount,
+				WarnPercent: cb.WarnPercent,
+			}
+			if err := tx.Create(&dst).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		fail(c, 500, "复制预算失败")
+		return
+	}
+	c.JSON(200, gin.H{"total_copied": src.ID != 0, "category_count": len(srcCbs)})
 }
