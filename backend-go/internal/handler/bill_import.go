@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -88,7 +89,40 @@ func (h *Handler) ConfirmBillImport(c *gin.Context) {
 		badRequest(c, err.Error())
 		return
 	}
-	c.JSON(200, res)
+	// 检查导入的账单是否落入已标记还款的账期，是则附带提醒（不阻止保存）
+	var hits []*repaymentHit
+	for i := range req.Items {
+		it := &req.Items[i]
+		if !it.Selected || it.IsFiltered {
+			continue
+		}
+		accID := req.AccountID
+		if it.AccountID != 0 {
+			accID = it.AccountID
+		}
+		if hit := h.repaymentMarkedFor(cu.ID, accID, parseOccurredTime(it.OccurredAt), it.Type); hit != nil {
+			hits = append(hits, hit)
+		}
+	}
+	c.JSON(200, gin.H{
+		"import_id":         res.ImportID,
+		"imported_count":    res.ImportedCount,
+		"skipped_count":     res.SkippedCount,
+		"message":           res.Message,
+		"repayment_warning": batchRepaymentWarnText(hits),
+	})
+}
+
+// parseOccurredTime 解析导入项日期字符串，失败返回零值。
+func parseOccurredTime(s string) time.Time {
+	s = strings.TrimSpace(s)
+	layouts := []string{"2006-01-02 15:04:05", "2006-01-02 15:04", "2006-01-02"}
+	for _, l := range layouts {
+		if t, err := time.ParseInLocation(l, s, time.Local); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
 }
 
 // ListImportHistory 导入历史（分页）。

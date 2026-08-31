@@ -184,6 +184,10 @@ async function applySelected() {
     } else {
       ElMessage.success(`已将 ${res.count} 笔固定账单记入 ${monthLabel.value}`)
     }
+    // 有账单落入已标记还款的账期时提醒（不阻止保存）
+    if (res && res.repayment_warning) {
+      ElMessage.warning(res.repayment_warning)
+    }
   } catch (e) {
     // 拦截器已提示
   } finally {

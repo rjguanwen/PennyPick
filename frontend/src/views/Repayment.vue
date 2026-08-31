@@ -16,6 +16,22 @@
       </div>
     </div>
 
+    <!-- 还款状态需要重新确认（已标记还款后账期内补录了新账单） -->
+    <el-alert
+      v-if="reconfirmList.length"
+      type="warning"
+      :closable="false"
+      show-icon
+      class="overdue-alert"
+      :title="`有 ${reconfirmList.length} 个账户已标记还款但账期内新增了账单，请重新标记还款情况`"
+    >
+      <div class="overdue-list">
+        <span v-for="o in reconfirmList" :key="o.account.id" class="overdue-chip">
+          {{ o.account.name }}（应还 ¥{{ formatMoney(o.month_expense) }} · 已还 ¥{{ formatMoney(o.amount) }}）
+        </span>
+      </div>
+    </el-alert>
+
     <!-- 还款状态提醒 -->
     <el-alert
       v-if="overdueList.length"
@@ -52,7 +68,8 @@
           <div class="acc-due">应还 ¥{{ formatMoney(item.month_expense) }} · 每月 {{ item.account.repay_day }} 日前还款</div>
         </div>
         <div class="acc-status">
-          <el-tag v-if="item.repaid && item.status === 'partial'" type="warning" effect="light">部分还款</el-tag>
+          <el-tag v-if="item.repaid && item.needs_reconfirm" type="warning" effect="dark">需重新确认</el-tag>
+          <el-tag v-else-if="item.repaid && item.status === 'partial'" type="warning" effect="light">部分还款</el-tag>
           <el-tag v-else-if="item.repaid" type="success" effect="light">已还款</el-tag>
           <el-tag v-else-if="item.overdue" type="danger" effect="light">逾期 {{ item.overdue_by }} 天</el-tag>
           <el-tag v-else-if="!item.has_expense" type="info" effect="plain">本期无支出</el-tag>
@@ -63,6 +80,7 @@
           <div class="repaid-note" v-if="item.note">{{ item.note }}</div>
         </div>
         <div class="acc-ops">
+          <el-button v-if="item.repaid && item.needs_reconfirm" link type="warning" size="small" @click="openMark(item)">重新标记</el-button>
           <el-button v-if="item.repaid" link type="danger" size="small" @click="unmark(item)">取消标记</el-button>
           <el-button v-else-if="item.has_expense" type="primary" size="small" @click="openMark(item)">标记已还款</el-button>
           <span v-else class="no-op">无需还款</span>
@@ -153,6 +171,7 @@ const repaidCount = computed(() => items.value.filter((i) => i.repaid).length)
 const pendingCount = computed(() => items.value.filter((i) => !i.repaid && i.has_expense).length)
 const noExpenseCount = computed(() => items.value.filter((i) => !i.has_expense).length)
 const overdueList = computed(() => items.value.filter((i) => i.overdue))
+const reconfirmList = computed(() => items.value.filter((i) => i.needs_reconfirm))
 
 function fmtTime(t) {
   if (!t) return ''
@@ -180,6 +199,11 @@ async function load() {
   loading.value = true
   try {
     items.value = (await repaymentApi.list(month.value)) || []
+    // 校验：已标记还款但账期内补录了新账单（应还 > 已还）时提示重新标记
+    const stale = items.value.filter((i) => i.needs_reconfirm)
+    if (stale.length) {
+      ElMessage.warning(`有 ${stale.length} 个账户已标记还款但账期内新增了账单，应还金额已变化，请重新标记还款情况`)
+    }
   } catch (e) {
     items.value = []
   } finally {

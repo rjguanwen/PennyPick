@@ -405,6 +405,10 @@ async function doConfirm() {
     const res = await billImportApi.confirm(payload)
     result.value = res
     step.value = 3
+    // 有账单落入已标记还款的账期时提醒（不阻止保存）
+    if (res && res.repayment_warning) {
+      ElMessage.warning(res.repayment_warning)
+    }
   } catch (e) {
     // 拦截器已提示
   } finally {

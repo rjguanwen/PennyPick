@@ -271,5 +271,17 @@ func (h *Handler) ApplyRecurringBills(c *gin.Context) {
 		fail(c, 400, err.Error())
 		return
 	}
-	c.JSON(201, gin.H{"count": len(created), "items": created, "duplicated": duplicated})
+	// 检查是否有账单落入已标记还款的账期，是则附带提醒（不阻止保存）
+	var hits []*repaymentHit
+	for i := range created {
+		b := &created[i]
+		var accID uint
+		if b.AccountID != nil {
+			accID = *b.AccountID
+		}
+		if hit := h.repaymentMarkedFor(cu.ID, accID, b.OccurredAt.Time, b.Type); hit != nil {
+			hits = append(hits, hit)
+		}
+	}
+	c.JSON(201, gin.H{"count": len(created), "items": created, "duplicated": duplicated, "repayment_warning": batchRepaymentWarnText(hits)})
 }

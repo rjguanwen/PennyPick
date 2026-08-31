@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -14,19 +15,20 @@ const diffBillNote = "补差：小额消费合计"
 
 // RepaymentItem 单个信用账户的还款状态。
 type RepaymentItem struct {
-	Account      *model.Account `json:"account"`
-	Repaid       bool           `json:"repaid"`
-	RepaidAt     *time.Time     `json:"repaid_at"`
-	Note         string         `json:"note"`
-	Amount       float64        `json:"amount"`        // 实际还款金额
-	Status       string         `json:"status"`        // full 全额 / partial 部分
-	DueDay       int            `json:"due_day"`
-	Overdue      bool           `json:"overdue"`
-	OverdueBy    int            `json:"overdue_by"`    // 逾期天数
-	MonthExpense float64        `json:"month_expense"` // 本期账单应还金额（账期内支出总额）
-	HasExpense   bool           `json:"has_expense"`   // 本期是否有支出
-	BillingStart string         `json:"billing_start"` // 本期账期开始（YYYY-MM-DD）
-	BillingEnd   string         `json:"billing_end"`   // 本期账期结束（YYYY-MM-DD，不含）
+	Account        *model.Account `json:"account"`
+	Repaid         bool           `json:"repaid"`
+	RepaidAt       *time.Time     `json:"repaid_at"`
+	Note           string         `json:"note"`
+	Amount         float64        `json:"amount"`         // 实际还款金额
+	Status         string         `json:"status"`         // full 全额 / partial 部分
+	NeedsReconfirm bool           `json:"needs_reconfirm"` // 已标记全额还款但实际还款额 < 当前应还金额（账期内补录了新账单），需重新确认
+	DueDay         int            `json:"due_day"`
+	Overdue        bool           `json:"overdue"`
+	OverdueBy      int            `json:"overdue_by"`    // 逾期天数
+	MonthExpense   float64        `json:"month_expense"` // 本期账单应还金额（账期内支出总额）
+	HasExpense     bool           `json:"has_expense"`   // 本期是否有支出
+	BillingStart   string         `json:"billing_start"` // 本期账期开始（YYYY-MM-DD）
+	BillingEnd     string         `json:"billing_end"`   // 本期账期结束（YYYY-MM-DD，不含）
 }
 
 // billingRange 返回查看月份 month（YYYY-MM）对应的账期 [start, end)。
@@ -109,6 +111,10 @@ func (h *Handler) ListRepayments(c *gin.Context) {
 			item.Status = r.Status
 			if item.Status == "" {
 				item.Status = model.RepayStatusFull
+			}
+			// 已标记全额还款，但当前应还金额超过实际还款额 → 账期内补录了新账单，需重新确认
+			if item.Status == model.RepayStatusFull && model.Round2(r.Amount) < expense {
+				item.NeedsReconfirm = true
 			}
 		} else if item.HasExpense && month == todayMonth && acc.RepayDay > 0 && today.Day() > acc.RepayDay {
 			// 仅当月且有支出时判定逾期（超过本月还款日）
@@ -328,4 +334,80 @@ func (h *Handler) otherCategory(userID uint) (*model.Category, error) {
 		return nil, err
 	}
 	return &cat, nil
+}
+
+// repaymentHit 一次“账单落入已标记还款账期”的命中信息。
+type repaymentHit struct {
+	AccountName string
+	Month       string
+	Amount      float64
+}
+
+// repaymentHitLabel 生成「账户名·M月账期」提示片段。
+func (r *repaymentHit) label() string {
+	if r == nil || r.AccountName == "" {
+		return ""
+	}
+	return "「" + r.AccountName + "」" + r.Month + "账期"
+}
+
+// repaymentMarkedFor 检查一笔账单（账户 + 日期 + 类型）是否落入某个已标记还款的账期。
+// 命中返回命中信息，未命中返回 nil。
+// 说明：账单日期所在账期对应的还款月份只会晚于或等于账单所在自然月（账期起点总是早于账单日期），
+// 因此只需检查 occurredAt 所在月及其后两个月即可覆盖所有账期映射（含还款日早于出账日的跨期场景）。
+func (h *Handler) repaymentMarkedFor(userID, accountID uint, occurredAt time.Time, typ string) *repaymentHit {
+	if typ != model.TypeExpense || occurredAt.IsZero() {
+		return nil
+	}
+	var acc model.Account
+	if err := h.db.Where("id = ? AND user_id = ?", accountID, userID).First(&acc).Error; err != nil {
+		return nil
+	}
+	if !acc.IsCredit {
+		return nil
+	}
+	for i := 0; i < 3; i++ {
+		m := occurredAt.AddDate(0, i, 0).Format("2006-01")
+		start, end, ok := billingRange(m, acc.StatementDay, acc.RepayDay)
+		if !ok {
+			continue
+		}
+		if !occurredAt.Before(start) && occurredAt.Before(end) {
+			var rep model.Repayment
+			h.db.Where("user_id = ? AND account_id = ? AND month = ?", userID, accountID, m).Limit(1).Find(&rep)
+			if rep.ID > 0 {
+				return &repaymentHit{AccountName: acc.Name, Month: m, Amount: rep.Amount}
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+// repaymentWarnText 生成单笔账单的还款提醒文案（未命中返回空串）。
+func repaymentWarnText(hit *repaymentHit) string {
+	if hit == nil {
+		return ""
+	}
+	return fmt.Sprintf("「%s」在 %s 已标记还款（还款 ¥%.2f），该账单落在其账期内，录入后请到「账户还款」页重新确认还款情况",
+		hit.AccountName, hit.Month, hit.Amount)
+}
+
+// batchRepaymentWarnText 批量录入场景：把命中的「账户·月份」聚合成提示文案。
+func batchRepaymentWarnText(hits []*repaymentHit) string {
+	seen := map[string]bool{}
+	var names []string
+	for _, h := range hits {
+		if h == nil {
+			continue
+		}
+		if lbl := h.label(); lbl != "" && !seen[lbl] {
+			seen[lbl] = true
+			names = append(names, lbl)
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return "以下账期已标记还款：" + strings.Join(names, "、") + "，请到「账户还款」页重新确认还款情况"
 }

@@ -220,7 +220,7 @@ async function save() {
       ElMessage.warning(`每条账单最多添加 ${maxBillTags} 个标签`)
       return
     }
-    await billApi.create({
+    const res = await billApi.create({
       type: form.type,
       amount: val,
       category_id: form.category_id,
@@ -229,6 +229,11 @@ async function save() {
       note: form.note,
       tag_ids,
     })
+
+    // 该账单落入已标记还款的账期时提醒（不阻止保存）
+    if (res && res.repayment_warning) {
+      ElMessage.warning(res.repayment_warning)
+    }
 
     checkBudgetWarning()
 

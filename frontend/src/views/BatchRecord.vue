@@ -171,6 +171,10 @@ async function saveAll() {
     }))
     const res = await billApi.createBatch({ account_id: account_id.value, items })
     ElMessage.success(`已保存 ${res.count || items.length} 笔账单`)
+    // 有账单落入已标记还款的账期时提醒（不阻止保存）
+    if (res && res.repayment_warning) {
+      ElMessage.warning(res.repayment_warning)
+    }
     rows.value = []
     addRow()
   } catch (e) {
