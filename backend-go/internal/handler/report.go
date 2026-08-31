@@ -433,7 +433,8 @@ type YearlyCategory struct {
 // YearlyRepayPoint 信用账户某月还款情况。
 type YearlyRepayPoint struct {
 	Month  string  `json:"month"`
-	Amount float64 `json:"amount"`
+	Due    float64 `json:"due"`    // 应还金额（该还款月账期内支出合计，口径与「账户还款」页一致）
+	Amount float64 `json:"amount"` // 已还金额（实际还款额）
 	Status string  `json:"status"` // full 全额 / partial 部分 / "" 未还款
 }
 
@@ -441,7 +442,8 @@ type YearlyRepayPoint struct {
 type YearlyCreditRepay struct {
 	AccountID uint               `json:"account_id"`
 	Name      string             `json:"name"`
-	Total     float64            `json:"total"`
+	Total     float64            `json:"total"`     // 全年已还金额
+	DueTotal  float64            `json:"due_total"` // 全年应还金额
 	Months    []YearlyRepayPoint `json:"months"`
 }
 
@@ -648,8 +650,21 @@ func (h *Handler) GenerateYearlyReport(c *gin.Context) {
 			creditIdx[a.ID] = i
 			cr := YearlyCreditRepay{AccountID: a.ID, Name: a.Name}
 			for j := 0; j < 12; j++ {
-				cr.Months = append(cr.Months, YearlyRepayPoint{Month: data.MonthlyTrend[j].Month})
+				m := data.MonthlyTrend[j].Month
+				point := YearlyRepayPoint{Month: m}
+				// 应还金额：该还款月账期内支出合计（与「账户还款」页 ListRepayments 口径一致）
+				if s, e, ok := billingRange(m, a.StatementDay, a.RepayDay); ok {
+					var due float64
+					h.db.Model(&model.Bill{}).
+						Where("user_id = ? AND type = ? AND account_id = ? AND occurred_at >= ? AND occurred_at < ?",
+							cu.ID, model.TypeExpense, a.ID, s, e).
+						Select("COALESCE(SUM(amount), 0)").Scan(&due)
+					point.Due = model.Round2(due)
+					cr.DueTotal += due
+				}
+				cr.Months = append(cr.Months, point)
 			}
+			cr.DueTotal = model.Round2(cr.DueTotal)
 			data.CreditRepay = append(data.CreditRepay, cr)
 		}
 		var reps []model.Repayment

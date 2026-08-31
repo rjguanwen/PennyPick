@@ -181,15 +181,22 @@
             <el-table-column prop="name" label="账户" width="110" fixed="left" />
             <el-table-column v-for="i in 12" :key="i" :label="i + '月'" align="center">
               <template #default="{ row }">
-                <span v-if="row[i]">
-                  ¥{{ formatMoney(row[i].amount) }}
-                  <el-tag v-if="row[i].status === 'full'" size="small" type="success">已还</el-tag>
-                  <el-tag v-else-if="row[i].status === 'partial'" size="small" type="warning">部分</el-tag>
-                </span>
-                <span v-else class="na">—</span>
+                <div v-if="row[i]" class="repay-cell">
+                  <div class="rc-due">应还 ¥{{ formatMoney(row[i].due) }}</div>
+                  <div class="rc-paid">
+                    已还 ¥{{ formatMoney(row[i].amount) }}
+                    <el-tag v-if="row[i].status === 'full'" size="small" type="success" effect="plain">还清</el-tag>
+                    <el-tag v-else-if="row[i].status === 'partial'" size="small" type="warning" effect="plain">部分</el-tag>
+                    <el-tag v-else size="small" type="danger" effect="plain">未还</el-tag>
+                  </div>
+                </div>
+                <div v-else class="na">—</div>
               </template>
             </el-table-column>
-            <el-table-column label="合计" align="center" width="110">
+            <el-table-column label="应还合计" align="center" width="110">
+              <template #default="{ row }"><b class="due-total">¥{{ formatMoney(row.due_total) }}</b></template>
+            </el-table-column>
+            <el-table-column label="已还合计" align="center" width="110">
               <template #default="{ row }"><b>¥{{ formatMoney(row.total) }}</b></template>
             </el-table-column>
           </el-table>
@@ -280,15 +287,15 @@ const cmpList = computed(() => {
   }
 })
 
-// 信用还款表格行
+// 信用还款表格行：每月同时展示应还金额与已还金额
 const repayRows = computed(() => {
   const list = yearData.value?.credit_repayment || []
   return list.map((a) => {
-    const row = { name: a.name, total: a.total }
+    const row = { name: a.name, total: a.total, due_total: a.due_total || 0 }
     a.months.forEach((m) => {
       const mm = Number(m.month.slice(5, 7))
-      if (m.amount > 0) {
-        row[mm] = { amount: m.amount, status: m.status }
+      if (Number(m.due) > 0 || Number(m.amount) > 0) {
+        row[mm] = { due: m.due || 0, amount: m.amount || 0, status: m.status || '' }
       }
     })
     return row
@@ -573,6 +580,10 @@ onBeforeUnmount(() => {
 .exp { color: #f56c6c; }
 .inc { color: #67c23a; }
 .na { color: #c0c4cc; }
+.repay-cell { line-height: 1.6; }
+.rc-due { font-size: 12px; color: #909399; }
+.rc-paid { font-size: 13px; color: #303133; }
+.due-total { color: #e6a23c; }
 .ov-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
