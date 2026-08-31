@@ -52,6 +52,9 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	user.POST("/accounts", h.CreateAccount)
 	user.PATCH("/accounts/:id", h.UpdateAccount)
 	user.DELETE("/accounts/:id", h.DeleteAccount)
+	// 账户查询（多账户按月支出，含账期/自然月口径）
+	user.GET("/accounts/query", h.AccountQuery)
+	user.GET("/accounts/query/bills", h.AccountQueryBills)
 
 	// 还款
 	user.GET("/repayments", h.ListRepayments)

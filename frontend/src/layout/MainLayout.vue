@@ -21,13 +21,14 @@
         <el-menu-item index="/bill-import"><el-icon><UploadFilled /></el-icon><span>账单导入</span></el-menu-item>
         <el-menu-item index="/bills"><el-icon><Tickets /></el-icon><span>账单查询</span></el-menu-item>
         <el-menu-item index="/repayment"><el-icon><CreditCard /></el-icon><span>账户还款</span></el-menu-item>
+        <el-menu-item index="/account-query"><el-icon><Search /></el-icon><span>账户查询</span></el-menu-item>
         <el-menu-item index="/stats"><el-icon><DataAnalysis /></el-icon><span>统计分析</span></el-menu-item>
         <el-menu-item index="/reports"><el-icon><Document /></el-icon><span>收支报告</span></el-menu-item>
         <el-menu-item index="/budget"><el-icon><Odometer /></el-icon><span>预算管理</span></el-menu-item>
         <el-menu-item index="/categories"><el-icon><Grid /></el-icon><span>分类管理</span></el-menu-item>
         <el-menu-item index="/accounts"><el-icon><Wallet /></el-icon><span>账户管理</span></el-menu-item>
         <el-menu-item v-if="isAdmin" index="/oplogs"><el-icon><Tickets /></el-icon><span>操作日志</span></el-menu-item>
-        <el-menu-item index="/settings"><el-icon><Setting /></el-icon><span>设置</span></el-menu-item>
+        <el-menu-item index="/settings"><el-icon><Operation /></el-icon><span>设置</span></el-menu-item>
       </el-menu>
       <div class="aside-footer">
         <el-dropdown @command="onCommand" trigger="click">

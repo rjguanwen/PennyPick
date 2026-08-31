@@ -114,6 +114,12 @@ export const recurringBillApi = {
   apply: (data) => api.post('/recurring-bills/apply', data),
 }
 
+// ===== 账户查询（多账户按月支出）=====
+export const accountQueryApi = {
+  query: (params) => api.get('/accounts/query', { params }),
+  bills: (params) => api.get('/accounts/query/bills', { params }),
+}
+
 // ===== 操作日志（仅管理员）=====
 export const oplogApi = {
   setting: () => api.get('/settings/oplog'),
