@@ -19,12 +19,15 @@ const MaxBillTags = 8
 
 // User 用户（个人记账：每个用户的数据相互隔离）。
 type User struct {
-	ID             uint      `gorm:"primaryKey" json:"id"`
-	Username       string    `gorm:"size:64;uniqueIndex;not null" json:"username"`
-	HashedPassword string    `gorm:"size:255;not null" json:"-"`
-	Nickname       string    `gorm:"size:64" json:"nickname"`
-	IsActive       bool      `gorm:"default:true" json:"is_active"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID               uint      `gorm:"primaryKey" json:"id"`
+	Username         string    `gorm:"size:64;uniqueIndex;not null" json:"username"`
+	HashedPassword   string    `gorm:"size:255;not null" json:"-"`
+	Nickname         string    `gorm:"size:64" json:"nickname"`
+	IsActive         bool      `gorm:"default:true" json:"is_active"`
+	PasswordHint     string    `gorm:"size:128" json:"password_hint"`     // 密码提示词
+	SecurityQuestion string    `gorm:"size:128" json:"security_question"` // 安全问答-问题
+	SecurityAnswer   string    `gorm:"size:128" json:"-"`                 // 安全问答-答案（存小写，不返回）
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 // CheckPassword 校验密码。

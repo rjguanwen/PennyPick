@@ -21,6 +21,9 @@
           <el-input v-model="loginForm.password" type="password" show-password placeholder="密码" size="large" :prefix-icon="Lock" @keyup.enter="onLogin" />
         </el-form-item>
         <el-button type="primary" size="large" class="submit" :loading="loading" @click="onLogin">登 录</el-button>
+        <div class="forgot-link">
+          <el-link type="primary" :underline="false" @click="openForgot">忘记密码？</el-link>
+        </div>
       </el-form>
 
       <el-form v-else @submit.prevent="onRegister">
@@ -39,6 +42,36 @@
         <el-button type="primary" size="large" class="submit" :loading="loading" @click="onRegister">注 册</el-button>
       </el-form>
     </div>
+
+    <!-- 找回密码弹窗 -->
+    <el-dialog v-model="forgotVisible" title="找回密码" width="min(420px, 92vw)" :close-on-click-modal="false">
+      <template v-if="forgotStep === 1">
+        <el-form label-position="top" @submit.prevent="step1">
+          <el-form-item label="用户名">
+            <el-input v-model="forgotForm.username" placeholder="请输入要找回密码的用户名" :prefix-icon="User" />
+          </el-form-item>
+          <el-button type="primary" class="forgot-btn" @click="step1">下一步</el-button>
+        </el-form>
+      </template>
+      <template v-else>
+        <div class="forgot-info">
+          <p>密码提示词：<b>{{ forgotInfo.password_hint || '未设置' }}</b></p>
+          <p>安全问题：<b>{{ forgotInfo.security_question || '未设置' }}</b></p>
+        </div>
+        <el-form label-position="top" @submit.prevent="reset">
+          <el-form-item label="安全问题答案">
+            <el-input v-model="forgotForm.answer" placeholder="请输入安全问题答案" />
+          </el-form-item>
+          <el-form-item label="新密码">
+            <el-input v-model="forgotForm.newPassword" type="password" show-password placeholder="新密码（至少 6 位）" />
+          </el-form-item>
+          <el-form-item label="确认新密码">
+            <el-input v-model="forgotForm.confirm" type="password" show-password placeholder="再次输入新密码" />
+          </el-form-item>
+          <el-button type="primary" class="forgot-btn" :loading="resetting" @click="reset">重置密码</el-button>
+        </el-form>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -78,6 +111,65 @@ async function onLogin() {
     router.push(route.query.redirect || '/dashboard')
   } finally {
     loading.value = false
+  }
+}
+
+// ===== 找回密码 =====
+const forgotVisible = ref(false)
+const forgotStep = ref(1)
+const forgotForm = reactive({ username: '', answer: '', newPassword: '', confirm: '' })
+const forgotInfo = ref({ password_hint: '', security_question: '' })
+const resetting = ref(false)
+
+function openForgot() {
+  forgotStep.value = 1
+  forgotForm.username = ''
+  forgotForm.answer = ''
+  forgotForm.newPassword = ''
+  forgotForm.confirm = ''
+  forgotVisible.value = true
+}
+
+async function step1() {
+  if (!forgotForm.username) {
+    ElMessage.warning('请输入用户名')
+    return
+  }
+  try {
+    const res = await authApi.forgot(forgotForm.username)
+    forgotInfo.value = res
+    forgotStep.value = 2
+  } catch (e) {
+    // 拦截器已提示
+  }
+}
+
+async function reset() {
+  if (!forgotForm.answer) {
+    ElMessage.warning('请输入安全问题答案')
+    return
+  }
+  if (!forgotForm.newPassword || forgotForm.newPassword.length < 6) {
+    ElMessage.warning('新密码至少 6 位')
+    return
+  }
+  if (forgotForm.newPassword !== forgotForm.confirm) {
+    ElMessage.warning('两次输入的密码不一致')
+    return
+  }
+  resetting.value = true
+  try {
+    await authApi.resetPassword({
+      username: forgotForm.username,
+      answer: forgotForm.answer,
+      new_password: forgotForm.newPassword,
+    })
+    ElMessage.success('密码已重置，请用新密码登录')
+    forgotVisible.value = false
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    resetting.value = false
   }
 }
 
@@ -173,5 +265,24 @@ async function onRegister() {
 .submit {
   width: 100%;
   margin-top: 8px;
+}
+.forgot-link {
+  text-align: center;
+  margin-top: 12px;
+}
+.forgot-btn {
+  width: 100%;
+}
+.forgot-info {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.8;
+}
+.forgot-info b {
+  color: #303133;
 }
 </style>

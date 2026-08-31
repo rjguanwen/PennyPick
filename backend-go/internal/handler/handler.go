@@ -35,11 +35,15 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	// 公开接口
 	api.POST("/auth/login", h.Login)
 	api.POST("/auth/register", h.Register)
+	// 密码找回（公开）
+	api.GET("/auth/forgot", h.GetPasswordRecovery)
+	api.POST("/auth/forgot/reset", h.ResetPassword)
 
 	// 需要登录
 	user := api.Group("", h.auth.RequireUser())
 	user.GET("/auth/me", h.Me)
 	user.PUT("/auth/password", h.ChangePassword)
+	user.PUT("/auth/security", h.SetSecurityInfo)
 
 	// 分类
 	user.GET("/categories", h.ListCategories)

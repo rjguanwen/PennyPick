@@ -78,6 +78,24 @@
       </el-form>
     </div>
 
+    <!-- 密码找回设置 -->
+    <div class="pp-card">
+      <div class="card-title"><el-icon><Key /></el-icon> 密码找回设置</div>
+      <p class="security-tip">忘记密码时，可查看密码提示词，或通过安全问答验证后重置密码。请妥善设置。</p>
+      <el-form label-position="top">
+        <el-form-item label="密码提示词（提示密码线索，仅自己可见）">
+          <el-input v-model="security.password_hint" maxlength="128" placeholder="如：我的幸运数字" />
+        </el-form-item>
+        <el-form-item label="安全问题（忘记密码时用于验证身份）">
+          <el-input v-model="security.security_question" maxlength="128" placeholder="如：我母亲的姓氏" />
+        </el-form-item>
+        <el-form-item label="安全答案（验证时不区分大小写）">
+          <el-input v-model="security.security_answer" maxlength="128" placeholder="填写与问题对应的答案" />
+        </el-form-item>
+        <el-button type="primary" :icon="Key" :loading="securitySaving" @click="saveSecurity">保存找回设置</el-button>
+      </el-form>
+    </div>
+
     <!-- 关于 -->
     <div class="pp-card">
       <div class="card-title"><el-icon><InfoFilled /></el-icon> 关于</div>
@@ -85,10 +103,10 @@
         <div class="about-logo">💰</div>
         <div class="about-name">拾财 PennyPick</div>
         <div class="about-desc">个人记账应用：轻松记下每一笔消费，多维度统计分析，科学规划预算，帮你管好每一分钱。</div>
-        <div class="about-item"><span>版本</span><b>1.1.0</b></div>
+        <div class="about-item"><span>版本</span><b>1.2.0</b></div>
         <div class="about-item"><span>开发者</span><b>关文</b></div>
         <div class="about-item"><span>邮箱</span><b>rjguanwen001@163.com</b></div>
-        <div class="about-item"><span>发布时间</span><b>2026-08-28</b></div>
+        <div class="about-item"><span>发布时间</span><b>2026-08-31</b></div>
         <div class="about-item"><span>技术栈</span><b>Vue 3 · Element Plus · Go</b></div>
       </div>
     </div>
@@ -121,7 +139,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CollectionTag, Download, Plus, Lock, InfoFilled, Coffee, Tickets } from '@element-plus/icons-vue'
+import { CollectionTag, Download, Plus, Lock, InfoFilled, Coffee, Tickets, Key } from '@element-plus/icons-vue'
 import donateImg from '../assets/skzh.png'
 import { authApi, exportApi, tagApi, oplogApi } from '../api'
 import { useAuthStore } from '../stores/auth'
@@ -143,6 +161,26 @@ const exporting = ref(false)
 
 const pwd = reactive({ old_password: '', new_password: '', confirm: '' })
 const pwdSaving = ref(false)
+
+// 密码找回设置
+const security = reactive({ password_hint: '', security_question: '', security_answer: '' })
+const securitySaving = ref(false)
+
+async function saveSecurity() {
+  if (security.security_question && !security.security_answer) {
+    ElMessage.warning('设置了安全问题则必须填写答案')
+    return
+  }
+  securitySaving.value = true
+  try {
+    await authApi.setSecurity(security)
+    ElMessage.success('找回设置已保存')
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    securitySaving.value = false
+  }
+}
 
 // 操作日志（仅管理员）
 const isAdmin = computed(() => auth.user?.username === 'admin')
@@ -257,6 +295,9 @@ async function changePassword() {
 
 onMounted(async () => {
   loadTags()
+  // 预填已保存的密码找回设置
+  security.password_hint = auth.user?.password_hint || ''
+  security.security_question = auth.user?.security_question || ''
   if (isAdmin.value) {
     try {
       const s = await oplogApi.setting()
@@ -418,5 +459,11 @@ onMounted(async () => {
 .oplog-label {
   font-size: 14px;
   color: #303133;
+}
+.security-tip {
+  font-size: 13px;
+  color: #909399;
+  line-height: 1.7;
+  margin: 0 0 12px;
 }
 </style>

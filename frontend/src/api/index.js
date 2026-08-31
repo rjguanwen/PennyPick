@@ -46,6 +46,9 @@ export const authApi = {
   register: (data) => api.post('/auth/register', data),
   me: () => api.get('/auth/me'),
   changePassword: (data) => api.put('/auth/password', data),
+  forgot: (username) => api.get('/auth/forgot', { params: { username } }),
+  resetPassword: (data) => api.post('/auth/forgot/reset', data),
+  setSecurity: (data) => api.put('/auth/security', data),
 }
 
 // ===== 分类 =====
