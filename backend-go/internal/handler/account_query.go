@@ -90,7 +90,9 @@ func (h *Handler) AccountQuery(c *gin.Context) {
 	}
 
 	// 区间内支出账单
-	rangeStart := startT
+	// 信用账户展示月 M 的账期 = [M-1 出账日, M 出账日)，开始月份的账期起点可能早于 startT（早在上月末），
+	// 因此查询起点需提前一个月，确保账期内属于上月末的账单被完整统计；归属仍按逐月账期/自然月判断，不影响其他月份。
+	rangeStart := startT.AddDate(0, -1, 0)
 	rangeEnd := endT.AddDate(0, 1, 0)
 	var bills []model.Bill
 	h.db.Where("user_id = ? AND type = ? AND occurred_at >= ? AND occurred_at < ?",

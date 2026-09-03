@@ -16,6 +16,20 @@
       </div>
     </div>
 
+    <!-- 本期还款汇总：醒目展示还需还款金额 -->
+    <div v-if="items.length" class="repay-total" :class="{ cleared: repaySummary.remain <= 0 }">
+      <div class="rt-main">
+        <div class="rt-label">还需还款 · {{ monthLabel }}</div>
+        <div class="rt-amount">¥{{ formatMoney(repaySummary.remain) }}</div>
+        <div v-if="repaySummary.remain <= 0 && repaySummary.due > 0" class="rt-clear">本期已全部还清，无需再还款</div>
+        <div v-else-if="repaySummary.remain <= 0" class="rt-clear">本期无待还账单，无需还款</div>
+      </div>
+      <div class="rt-sub">
+        <div>本期合计应还 <b>¥{{ formatMoney(repaySummary.due) }}</b></div>
+        <div>已还金额 <b>¥{{ formatMoney(repaySummary.paid) }}</b></div>
+      </div>
+    </div>
+
     <!-- 还款状态需要重新确认（已标记还款后账期内补录了新账单） -->
     <el-alert
       v-if="reconfirmList.length"
@@ -173,6 +187,22 @@ const noExpenseCount = computed(() => items.value.filter((i) => !i.has_expense).
 const overdueList = computed(() => items.value.filter((i) => i.overdue))
 const reconfirmList = computed(() => items.value.filter((i) => i.needs_reconfirm))
 
+// 本期还款汇总：合计应还 = 各账户账期应还之和；还需还款 = 应还 - 已还（未标记视为 0）
+const repaySummary = computed(() => {
+  const r2 = (v) => Math.round((Number(v) || 0) * 100) / 100
+  let due = 0
+  let paid = 0
+  let remain = 0
+  for (const it of items.value) {
+    const exp = r2(it.month_expense)
+    const repaid = it.repaid ? r2(it.amount) : 0
+    due += exp
+    paid += repaid
+    remain += exp > repaid ? exp - repaid : 0
+  }
+  return { due: r2(due), paid: r2(paid), remain: r2(remain) }
+})
+
 function fmtTime(t) {
   if (!t) return ''
   return t.slice(0, 10)
@@ -284,6 +314,55 @@ onMounted(load)
 </script>
 
 <style scoped>
+/* 本期还款汇总条 */
+.repay-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+  padding: 16px 22px;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #ff9a3d, #f56c6c);
+  box-shadow: 0 4px 14px rgba(245, 108, 108, 0.3);
+}
+.repay-total.cleared {
+  background: linear-gradient(135deg, #67c23a, #95d475);
+  box-shadow: 0 4px 14px rgba(103, 194, 58, 0.3);
+}
+.rt-main {
+  flex: 1;
+  min-width: 0;
+}
+.rt-label {
+  font-size: 13px;
+  opacity: 0.95;
+}
+.rt-amount {
+  margin-top: 4px;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
+}
+.rt-clear {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.95;
+}
+.rt-sub {
+  text-align: right;
+  font-size: 13px;
+  line-height: 2;
+  opacity: 0.98;
+  white-space: nowrap;
+}
+.rt-sub b {
+  font-size: 16px;
+  font-weight: 700;
+}
 .page-head {
   display: flex;
   align-items: center;

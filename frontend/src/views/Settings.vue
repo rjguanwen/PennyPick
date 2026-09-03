@@ -103,10 +103,10 @@
         <div class="about-logo">💰</div>
         <div class="about-name">拾财 PennyPick</div>
         <div class="about-desc">个人记账应用：轻松记下每一笔消费，多维度统计分析，科学规划预算，帮你管好每一分钱。</div>
-        <div class="about-item"><span>版本</span><b>1.2.0</b></div>
+        <div class="about-item"><span>版本</span><b>1.3.0</b></div>
         <div class="about-item"><span>开发者</span><b>关文</b></div>
         <div class="about-item"><span>邮箱</span><b>rjguanwen001@163.com</b></div>
-        <div class="about-item"><span>发布时间</span><b>2026-08-31</b></div>
+        <div class="about-item"><span>发布时间</span><b>2026-09-03</b></div>
         <div class="about-item"><span>技术栈</span><b>Vue 3 · Element Plus · Go</b></div>
       </div>
     </div>
