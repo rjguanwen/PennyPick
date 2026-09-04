@@ -147,12 +147,13 @@ func (h *Handler) AccountQuery(c *gin.Context) {
 
 // AccountQueryBillItem 账户某月支出明细项。
 type AccountQueryBillItem struct {
-	ID           uint    `json:"id"`
-	OccurredAt   string  `json:"occurred_at"`
-	CategoryName string  `json:"category_name"`
-	CategoryIcon string  `json:"category_icon"`
-	Amount       float64 `json:"amount"`
-	Note         string  `json:"note"`
+	ID           uint        `json:"id"`
+	OccurredAt   string      `json:"occurred_at"`
+	CategoryName string      `json:"category_name"`
+	CategoryIcon string      `json:"category_icon"`
+	Amount       float64     `json:"amount"`
+	Note         string      `json:"note"`
+	Tags         []model.Tag `json:"tags"`
 }
 
 // AccountQueryBills 某账户某展示月的支出明细（账期/自然月口径与统计一致）。
@@ -171,7 +172,7 @@ func (h *Handler) AccountQueryBills(c *gin.Context) {
 	}
 	rs, re := accountMonthRange(&acc, month)
 	var bills []model.Bill
-	h.db.Preload("Category").
+	h.db.Preload("Category").Preload("Tags").
 		Where("user_id = ? AND account_id = ? AND type = ? AND occurred_at >= ? AND occurred_at < ?",
 			cu.ID, accountID, model.TypeExpense, rs, re).
 		Order("occurred_at asc, id asc").Find(&bills)
@@ -189,6 +190,7 @@ func (h *Handler) AccountQueryBills(c *gin.Context) {
 			CategoryIcon: catIcon,
 			Amount:       model.Round2(b.Amount - b.RefundAmount),
 			Note:         b.Note,
+			Tags:         b.Tags,
 		})
 	}
 	c.JSON(200, gin.H{"account_id": acc.ID, "account_name": acc.Name, "month": month, "items": items})

@@ -66,7 +66,7 @@
     <el-empty v-if="!loading && !creditRows.length && !normalRows.length" description="当前范围内没有账户数据" :image-size="60" />
 
     <!-- 明细弹窗 -->
-    <el-dialog v-model="detailVisible" :title="detailTitle" width="720px" :close-on-click-modal="false">
+    <el-dialog v-model="detailVisible" :title="detailTitle" width="860px" :close-on-click-modal="false">
       <el-table :data="detailItems" size="small" style="width: 100%">
         <el-table-column prop="occurred_at" label="时间" width="150" />
         <el-table-column label="分类" width="110">
@@ -77,6 +77,14 @@
         </el-table-column>
         <el-table-column label="金额" width="120" align="right">
           <template #default="{ row }"><span class="exp">¥{{ formatMoney(row.amount) }}</span></template>
+        </el-table-column>
+        <el-table-column label="标签" width="180">
+          <template #default="{ row }">
+            <div v-if="row.tags && row.tags.length" class="aq-tags">
+              <el-tag v-for="t in row.tags" :key="t.id" size="small" type="info" effect="plain" class="aq-tag">{{ t.name }}</el-tag>
+            </div>
+            <span v-else class="cell-zero">—</span>
+          </template>
         </el-table-column>
         <el-table-column prop="note" label="备注" show-overflow-tooltip />
       </el-table>
@@ -231,6 +239,14 @@ onMounted(load)
 }
 .exp {
   color: #f56c6c;
+}
+.aq-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.aq-tag {
+  border-radius: 6px;
 }
 .detail-total {
   float: left;
